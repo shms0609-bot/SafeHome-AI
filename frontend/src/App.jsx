@@ -48,7 +48,8 @@ function App() {
     const formData = new FormData();
     formData.append('file', file);
     try {
-      const res = await fetch('http://127.0.0.1:8000/analyze', { method: 'POST', body: formData });
+      // ✨ 로컬 주소에서 Render 서버 주소로 변경 완료
+      const res = await fetch('https://safehome-ai-pkkv.onrender.com/analyze', { method: 'POST', body: formData });
       if (!res.ok) throw new Error("서버 응답 오류");
       const data = await res.json();
       setAnalysis(data.analysis);
@@ -64,7 +65,8 @@ function App() {
     setChatInput("");
     setChatLoading(true);
     try {
-      const res = await fetch('http://127.0.0.1:8000/chat', {
+      // ✨ 로컬 주소에서 Render 서버 주소로 변경 완료
+      const res = await fetch('https://safehome-ai-pkkv.onrender.com/chat', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ user_message: chatInput, analysis_context: analysis })
@@ -85,7 +87,8 @@ function App() {
     setRegResult(null);
     
     try {
-      const res = await fetch('http://127.0.0.1:8000/fetch-real-estate', {
+      // ✨ 로컬 주소에서 Render 서버 주소로 변경 완료
+      const res = await fetch('https://safehome-ai-pkkv.onrender.com/fetch-real-estate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

@@ -25,13 +25,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# 서버 시작 시 환경 변수 로드 상태 확인
 api_key = os.getenv("GEMINI_API_KEY")
+if api_key:
+    print(f"✅ 성공: API KEY 로드 완료 ({api_key[:10]}...)")
+else:
+    print("❌ 에러: GEMINI_API_KEY가 로드되지 않았습니다.")
+
 gemini_client = Client(api_key=api_key) if api_key else None
 
-# ✨ [추가] AI의 대답 속도와 길이를 최적화하는 설정
+# ✨ AI 성능 튜닝: 속도는 높이고 대답 길이는 넉넉하게!
 ai_config = {
-    "temperature": 0.7,        # 창의성과 정확성의 적절한 균형
-    "max_output_tokens": 2048, # 답변이 길어져도 잘리지 않게 충분히 확보
+    "temperature": 0.7,
+    "max_output_tokens": 2048,  # 토큰 양을 늘려 대답이 잘리지 않게 함
     "top_p": 0.95,
 }
 
@@ -74,7 +80,6 @@ class CodefService:
         url = f"{self.base_url}/kr/public/ck/real-estate-register/status" 
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
         
-        # 승현님이 완성하신 대법원 조회 규격 그대로 유지
         payload = {
             "organization": "0002", "phoneNo": real_phone, "password": encrypted_password, 
             "inquiryType": params.get("inquiryType", "3"), "realtyType": params.get("realtyType", "1"),
@@ -84,11 +89,11 @@ class CodefService:
         
         try:
             response = requests.post(url, headers=headers, json=payload)
-            return json.loads(urllib.parse.unquote(response.text))
+            res_data = json.loads(urllib.parse.unquote(response.text))
+            return res_data
         except: return {"error": "통신 에러"}
 
 codef = CodefService()
-
 
 class OpenLawService:
     def __init__(self):
@@ -96,30 +101,26 @@ class OpenLawService:
         self.base_url = "http://www.law.go.kr/DRF/lawSearch.do"
 
     def get_fallback_data(self):
-        return """
-■ 사건명: 임대차보증금등·손해배상(기)
-■ 판결요지: 대규모 하자는 임대인(집주인)이 수선의무를 부담한다. (대법원 2011다107405 판결)
+        return """■ 사건명: 임대차보증금등·손해배상(기)
+■ 판결요지: 임대인은 사용·수익에 필요한 상태를 유지할 의무가 있다. 대규모 하자는 집주인 부담이다. (2011다107405)
 ■ 사건명: 손해배상(기)
-■ 판결요지: 기본적 설비교체 등 대규모 수선은 특약이 있어도 집주인이 부담한다. (대법원 94다34692 판결)
-"""
+■ 판결요지: 대규모 수선은 특약이 있어도 집주인이 수리해야 한다. (94다34692)"""
 
     def search_precedent(self, keyword="임대차 하자보수"):
         try:
             url = f"{self.base_url}?OC={self.api_key}&target=prec&type=XML&query={urllib.parse.quote(keyword)}"
-            # 봇 차단 우회를 위한 User-Agent 유지
             response = requests.get(url, headers={"User-Agent": "Mozilla/5.0"}, timeout=3)
             root = ET.fromstring(response.text)
             prec_list = []
             for item in root.findall('.//prec')[:2]: 
                 title = item.findtext('사건명')
-                content = item.findtext('판결요지').replace('<![CDATA[', '').replace(']]>', '').strip()
+                content = item.findtext('판결요지', default='요지 없음').replace('<![CDATA[', '').replace(']]>', '').strip()
                 prec_list.append(f"■ {title}\n{content}")
             return "\n\n".join(prec_list) if prec_list else self.get_fallback_data()
-        except: 
+        except:
             return self.get_fallback_data()
 
 open_law = OpenLawService()
-
 
 class RealEstateRequest(BaseModel):
     addr_sido: str; addr_sigungu: str; addr_roadName: str = ""; addr_buildingNumber: str = ""
@@ -133,9 +134,9 @@ async def analyze_contract(file: UploadFile = File(...)):
     try:
         contents = await file.read()
         image_part = types.Part.from_bytes(data=contents, mime_type=file.content_type)
-        prompt = "귀하는 대한민국 부동산 법률 분석 AI입니다... (생략)"
+        prompt = "대한민국 부동산 법률 분석 AI로서 계약서를 분석하고 위험도를 평가하십시오."
         
-        # ✨ 최신 모델(2.0)과 최적화 설정 적용
+        # ✨ gemini-2.0-flash 모델명 사용 (가장 빠름)
         response = gemini_client.models.generate_content(
             model="gemini-2.0-flash", 
             contents=[prompt, image_part],
@@ -147,25 +148,19 @@ async def analyze_contract(file: UploadFile = File(...)):
 @app.post("/chat")
 async def chat_with_ai(request: ChatRequest):
     try:
-        # 승현님의 비상 데이터 로직 유지
         real_law_data = open_law.search_precedent("임대차 하자보수")
+        prompt = f"판례 전문가로서 다음 질문에 답하세요.\n[판례]\n{real_law_data}\n\n[계약분석]\n{request.analysis_context}\n\n[질문]\n{request.user_message}"
         
-        prompt = f"""
-        당신은 SafeHome AI 임대차 하자 보수 분쟁 분석 전문가입니다.
-        [판례 데이터]\n{real_law_data}
-        [계약서 상황]\n{request.analysis_context}
-        [사용자 질문]\n{request.user_message}
-        판례를 인용하여 명확하고 빠르게 답변하십시오.
-        """
-        
-        # ✨ 최신 모델(2.0)과 최적화 설정 적용
+        # ✨ gemini-2.0-flash 모델명 사용 (404 에러 방지)
         response = gemini_client.models.generate_content(
             model="gemini-2.0-flash",
             contents=prompt,
             config=ai_config
         )
         return {"reply": response.text}
-    except: return {"reply": "상담 중 오류가 발생했습니다. 다시 시도해 주세요."}
+    except Exception as e:
+        print(f"❌ 챗봇 오류: {str(e)}")
+        return {"reply": "법률 판례를 해석하는 중 오류가 발생했습니다. 잠시 후 다시 질문해 주세요."}
 
 @app.get("/ping")
 async def ping(): return {"message": "pong"}

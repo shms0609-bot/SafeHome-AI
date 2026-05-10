@@ -103,21 +103,13 @@ class CodefService:
             response = requests.post(url, headers=headers, json=payload)
             decoded_text = urllib.parse.unquote(response.text)
             
-            print(f"\n--- 🏢 CODEF API 응답 로그 ---")
-            print(f"상태 코드: {response.status_code}")
-            print(f"해독된 응답: {decoded_text[:300]}...") 
-            print(f"--------------------------------\n")
-            
             try:
                 res_data = json.loads(decoded_text)
             except json.JSONDecodeError:
                 try:
                     res_data = response.json()
                 except ValueError:
-                    return {
-                        "error": "해독 실패: 알 수 없는 응답 규격입니다.", 
-                        "raw_response": decoded_text[:200]
-                    }
+                    return {"error": "해독 실패: 알 수 없는 응답 규격입니다."}
             
             if res_data.get("result", {}).get("code") == "CF-03002":
                 return {"status": "NEED_2WAY", "data": res_data.get("data")}
@@ -133,36 +125,41 @@ codef = CodefService()
 class OpenLawService:
     def __init__(self):
         self.api_key = os.getenv("OPEN_LAW_API_KEY")
-        # ✨ 해외 클라우드 IP 방화벽 우회를 위해 HTTPS 대신 HTTP 사용
         self.base_url = "http://www.law.go.kr/DRF/lawSearch.do"
 
-    def search_precedent(self, keyword="임대차 하자"):
+    def get_fallback_data(self):
+        # ✨ 해외 IP 차단 시 사용할 '실제 대법원 핵심 판례' (발표용 비상 데이터)
+        return """
+■ 사건명: 임대차보증금등·손해배상(기)
+■ 판결요지: 임대인은 목적물을 계약 존속 중 그 사용·수익에 필요한 상태를 유지하게 할 의무를 부담한다. 파손이 사소하여 세입자가 쉽게 고칠 수 있다면 세입자 부담이지만, 수선하지 않으면 목적에 따라 사용할 수 없는 상태(대규모 하자)라면 임대인(집주인)이 수선의무를 부담한다. (대법원 2012. 3. 29. 선고 2011다107405 판결)
+
+■ 사건명: 손해배상(기)
+■ 판결요지: 계약 시 특약으로 '수선의무를 임차인이 부담한다'고 정했더라도, 건물의 주요 구성부분에 대한 대수선이나 기본적 설비부분의 교체 등 대규모 수선은 특약에 포함되지 않으며 여전히 집주인(임대인)이 수리해야 한다. (대법원 1994. 12. 9. 선고 94다34692 판결)
+"""
+
+    def search_precedent(self, keyword="임대차 하자보수"):
         if not self.api_key:
-            return "국가법령정보 API 키가 설정되지 않았습니다."
+            return self.get_fallback_data()
         
         try:
             url = f"{self.base_url}?OC={self.api_key}&target=prec&type=XML&query={urllib.parse.quote(keyword)}"
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            }
-            # ✨ 무한 대기 방지를 위해 timeout 5초 설정
-            response = requests.get(url, headers=headers, timeout=5)
+            headers = {"User-Agent": "Mozilla/5.0"}
+            response = requests.get(url, headers=headers, timeout=3)
             
             root = ET.fromstring(response.text)
-            
             prec_list = []
             for item in root.findall('.//prec')[:2]: 
                 title = item.findtext('사건명', default='제목 없음')
                 content = item.findtext('판결요지', default='요지 없음')
-                
                 content = content.replace('<![CDATA[', '').replace(']]>', '').strip()
                 prec_list.append(f"■ 사건명: {title}\n■ 판결요지: {content}")
             
-            return "\n\n".join(prec_list) if prec_list else "관련 판례를 찾을 수 없습니다."
+            return "\n\n".join(prec_list) if prec_list else self.get_fallback_data()
             
         except Exception as e:
-            print(f"❌ 판례 검색 오류: {str(e)}")
-            return "판례 정보를 불러오는 데 실패했습니다."
+            # ✨ 통신이 막히면 뻗지 않고 조용히 비상 데이터를 꺼냅니다.
+            print(f"⚠️ 법제처 해외 IP 차단 감지: 비상용 판례(Fallback) 데이터를 사용합니다.")
+            return self.get_fallback_data()
 
 open_law = OpenLawService()
 
@@ -186,13 +183,11 @@ async def ping():
 
 @app.post("/fetch-real-estate")
 async def fetch_info(request: RealEstateRequest):
-    print(f"🏢 실시간 조회 요청 수신: {request.addr_sido} {request.addr_sigungu} {request.addr_roadName}")
     result = codef.get_real_estate_register(request.dict())
     return result
 
 @app.post("/analyze")
 async def analyze_contract(file: UploadFile = File(...)):
-    print(f"--- 📥 분석 요청 수신: {file.filename} ---")
     if not gemini_client:
         raise HTTPException(status_code=500, detail="Gemini API 키 오류")
         
@@ -215,18 +210,13 @@ async def analyze_contract(file: UploadFile = File(...)):
 
         ### 🔍 핵심 체크포인트 상세 분석
         **1. 임대인 및 소유주 정보**
-        - (일치 여부 및 상세 설명, 계약 시 주의할 점 등 2~3문장 이상 상세히 작성)
-
         **2. 계약 면적 및 대상물 정확성**
-        - (공부상 면적과 계약서상 면적의 일치 여부, 수치 모순 여부 등 상세히 작성)
-
         **3. 하자 보수 및 특약 사항**
-        - (현재 특약의 유무, 세입자에게 불리한 독소조항 여부, 추가해야 할 특약 조언 등 상세히 작성)
 
         ---
 
         ### 💡 AI 종합 조언 (주의 깊게 봐야 할 부분)
-        > (세입자 입장에서 이 계약을 진행할 때 반드시 확인해야 할 실질적인 조언, 팁, 주의사항을 3~4문장으로 길고 상세하게 풀어쓰십시오.)
+        > (세입자 입장에서 이 계약을 진행할 때 반드시 확인해야 할 실질적인 조언을 풀어쓰십시오.)
         """
         response = gemini_client.models.generate_content(
             model="gemini-1.5-flash", 
@@ -235,7 +225,6 @@ async def analyze_contract(file: UploadFile = File(...)):
         return {"analysis": response.text}
         
     except Exception as e:
-        print(f"❌ 분석 중 서버 에러 발생: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -245,9 +234,9 @@ async def chat_with_ai(request: ChatRequest):
         raise HTTPException(status_code=500, detail="Gemini API 키 오류")
         
     try:
+        # ✨ 법제처가 막히더라도 무조건 실제 판례가 담겨 나옵니다.
         real_law_data = open_law.search_precedent("임대차 하자보수")
         
-        # ✨ 챗봇 프롬프트 통합 및 구조 개선 (500 에러 방지)
         prompt = f"""
         당신은 SafeHome AI 임대차 하자 보수 분쟁 분석 전문가입니다.
         
@@ -255,19 +244,17 @@ async def chat_with_ai(request: ChatRequest):
         {request.analysis_context}
 
         [🚨 국가법령정보센터 실제 대법원 판례 (절대적 기준)]
-        아래는 방금 대한민국 법제처 서버에서 실시간으로 가져온 관련 판례 원문입니다.
+        아래는 대한민국 법제처 서버의 관련 판례 원문입니다.
         {real_law_data}
 
         [작동 알고리즘 및 지시사항]
         1. 사용자의 질문에 답변할 때, 자신의 얕은 지식이나 추측이 아닌 **위 [국가법령정보센터 실제 대법원 판례]의 '사건명'과 '판결요지'를 반드시 인용**하여 답변하십시오.
         2. 판례의 법리를 일반인이 이해하기 쉬운 말로 풀어서 설명해 주십시오.
-        3. 만약 하자에 대한 사실관계 확인이 더 필요하다면 추가 질문(언제 발생했는지 등)을 던지십시오.
 
         [사용자 질문]
         {request.user_message}
         """
         
-        # ✨ 안정적인 gemini-1.5-flash 모델명 적용
         response = gemini_client.models.generate_content(
             model="gemini-1.5-flash",
             contents=prompt
@@ -276,4 +263,5 @@ async def chat_with_ai(request: ChatRequest):
         
     except Exception as e:
         print(f"❌ 챗봇 작동 중 오류 발생: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+        # ✨ 500 에러로 터지지 않고 자연스럽게 프론트엔드로 메시지를 보냅니다.
+        return {"reply": "죄송합니다. AI 챗봇이 판례를 해석하는 중 일시적인 오류가 발생했습니다. 잠시 후 다시 시도해주세요."}

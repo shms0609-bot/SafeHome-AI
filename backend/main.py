@@ -92,7 +92,7 @@ class CodefService:
             "realtyType": "1", # 집합건물 기본값
             "jointMortgageJeonseYN": "1",
             "tradingYN": "1",
-            "issueType": "1", # 1: 열람
+            "issueType": "2", # ✨ 2: 고유번호 조회 (결제 필요 없는 무료 테스트용)
             "registerSummaryYN": "1",
             **params
         }

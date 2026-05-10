@@ -25,19 +25,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 서버 시작 시 환경 변수 로드 상태 확인
 api_key = os.getenv("GEMINI_API_KEY")
-if api_key:
-    print(f"✅ 성공: API KEY 로드 완료 ({api_key[:10]}...)")
-else:
-    print("❌ 에러: GEMINI_API_KEY가 로드되지 않았습니다.")
-
 gemini_client = Client(api_key=api_key) if api_key else None
 
-# ✨ AI 성능 튜닝: 속도는 높이고 대답 길이는 넉넉하게!
+# ✨ AI 성능 튜닝: 속도와 토큰 양을 결정하는 설정 (Latest 모델에서도 적용 가능)
 ai_config = {
     "temperature": 0.7,
-    "max_output_tokens": 2048,  # 토큰 양을 늘려 대답이 잘리지 않게 함
+    "max_output_tokens": 2048,
     "top_p": 0.95,
 }
 
@@ -89,8 +83,7 @@ class CodefService:
         
         try:
             response = requests.post(url, headers=headers, json=payload)
-            res_data = json.loads(urllib.parse.unquote(response.text))
-            return res_data
+            return json.loads(urllib.parse.unquote(response.text))
         except: return {"error": "통신 에러"}
 
 codef = CodefService()
@@ -102,7 +95,7 @@ class OpenLawService:
 
     def get_fallback_data(self):
         return """■ 사건명: 임대차보증금등·손해배상(기)
-■ 판결요지: 임대인은 사용·수익에 필요한 상태를 유지할 의무가 있다. 대규모 하자는 집주인 부담이다. (2011다107405)
+■ 판결요지: 대규모 하자는 집주인(임대인)이 수선의무를 부담한다. (2011다107405)
 ■ 사건명: 손해배상(기)
 ■ 판결요지: 대규모 수선은 특약이 있어도 집주인이 수리해야 한다. (94다34692)"""
 
@@ -117,8 +110,7 @@ class OpenLawService:
                 content = item.findtext('판결요지', default='요지 없음').replace('<![CDATA[', '').replace(']]>', '').strip()
                 prec_list.append(f"■ {title}\n{content}")
             return "\n\n".join(prec_list) if prec_list else self.get_fallback_data()
-        except:
-            return self.get_fallback_data()
+        except: return self.get_fallback_data()
 
 open_law = OpenLawService()
 
@@ -136,9 +128,9 @@ async def analyze_contract(file: UploadFile = File(...)):
         image_part = types.Part.from_bytes(data=contents, mime_type=file.content_type)
         prompt = "대한민국 부동산 법률 분석 AI로서 계약서를 분석하고 위험도를 평가하십시오."
         
-        # ✨ gemini-2.0-flash 모델명 사용 (가장 빠름)
+        # ✨ 구관이 명관! gemini-flash-latest 모델로 원복
         response = gemini_client.models.generate_content(
-            model="gemini-2.0-flash", 
+            model="gemini-flash-latest", 
             contents=[prompt, image_part],
             config=ai_config
         )
@@ -149,18 +141,16 @@ async def analyze_contract(file: UploadFile = File(...)):
 async def chat_with_ai(request: ChatRequest):
     try:
         real_law_data = open_law.search_precedent("임대차 하자보수")
-        prompt = f"판례 전문가로서 다음 질문에 답하세요.\n[판례]\n{real_law_data}\n\n[계약분석]\n{request.analysis_context}\n\n[질문]\n{request.user_message}"
+        prompt = f"판례 전문가로서 다음 질문에 답하세요.\n[판례]\n{real_law_data}\n\n[상황]\n{request.analysis_context}\n\n[질문]\n{request.user_message}"
         
-        # ✨ gemini-2.0-flash 모델명 사용 (404 에러 방지)
+        # ✨ 404 에러 방지를 위해 gemini-flash-latest 모델로 원복
         response = gemini_client.models.generate_content(
-            model="gemini-2.0-flash",
+            model="gemini-flash-latest",
             contents=prompt,
             config=ai_config
         )
         return {"reply": response.text}
-    except Exception as e:
-        print(f"❌ 챗봇 오류: {str(e)}")
-        return {"reply": "법률 판례를 해석하는 중 오류가 발생했습니다. 잠시 후 다시 질문해 주세요."}
+    except: return {"reply": "답변 중 오류가 발생했습니다. 잠시 후 다시 질문해 주세요."}
 
 @app.get("/ping")
 async def ping(): return {"message": "pong"}

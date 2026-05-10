@@ -72,9 +72,14 @@ class CodefService:
             return {"error": "CODEF API 토큰 발급 실패. .env 파일을 확인하세요."}
         
         real_phone = os.getenv("REAL_ESTATE_PHONE", "01000000000")
-        real_password = os.getenv("REAL_ESTATE_PASSWORD", "")
+        raw_password = os.getenv("REAL_ESTATE_PASSWORD", "1234")
         
-        encrypted_password = self.encrypt_rsa(real_password)
+        # 🌟 대법원 매뉴얼 필수 조건: 비밀번호는 무조건 4자리 숫자여야 함
+        if len(raw_password) != 4 or not raw_password.isdigit():
+            print(f"⚠️ 경고: 설정된 비밀번호가 4자리 숫자가 아닙니다. 기본값 1234로 대체합니다.")
+            raw_password = "1234"
+            
+        encrypted_password = self.encrypt_rsa(raw_password)
         
         url = f"{self.base_url}/kr/public/ck/real-estate-register/status" 
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
@@ -84,10 +89,10 @@ class CodefService:
             "phoneNo": real_phone, 
             "password": encrypted_password, 
             "inquiryType": params.get("inquiryType", "3"),
-            "realtyType": "1",
+            "realtyType": "1", # 집합건물 기본값
             "jointMortgageJeonseYN": "1",
             "tradingYN": "1",
-            "issueType": "1",
+            "issueType": "1", # 1: 열람
             "registerSummaryYN": "1",
             **params
         }
@@ -112,6 +117,7 @@ class CodefService:
                         "raw_response": decoded_text[:200]
                     }
             
+            # 추가 인증이 필요한 경우 (CF-03002)
             if res_data.get("result", {}).get("code") == "CF-03002":
                 return {"status": "NEED_2WAY", "data": res_data.get("data")}
                 
@@ -122,7 +128,7 @@ class CodefService:
 
 codef = CodefService()
 
-# 🌟 대법원 규격에 맞게 파라미터 분리
+# 🌟 대법원 규격에 맞게 파라미터 분리 (inquiryType 3 기준)
 class RealEstateRequest(BaseModel):
     addr_sido: str
     addr_sigungu: str

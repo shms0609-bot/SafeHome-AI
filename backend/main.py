@@ -28,13 +28,6 @@ app.add_middleware(
 api_key = os.getenv("GEMINI_API_KEY")
 gemini_client = Client(api_key=api_key) if api_key else None
 
-# ✨ AI 성능 튜닝: 속도와 토큰 양을 결정하는 설정 (Latest 모델에서도 적용 가능)
-ai_config = {
-    "temperature": 0.7,
-    "max_output_tokens": 2048,
-    "top_p": 0.95,
-}
-
 class CodefService:
     def __init__(self):
         self.client_id = os.getenv("CODEF_CLIENT_ID")
@@ -66,21 +59,17 @@ class CodefService:
     def get_real_estate_register(self, params: dict):
         token = self.get_access_token()
         if not token: return {"error": "CODEF API 토큰 발급 실패"}
-        
         real_phone = os.getenv("REAL_ESTATE_PHONE", "01000000000")
         raw_password = os.getenv("REAL_ESTATE_PASSWORD", "1234")
         encrypted_password = self.encrypt_rsa(raw_password)
-        
         url = f"{self.base_url}/kr/public/ck/real-estate-register/status" 
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-        
         payload = {
             "organization": "0002", "phoneNo": real_phone, "password": encrypted_password, 
             "inquiryType": params.get("inquiryType", "3"), "realtyType": params.get("realtyType", "1"),
             "jointMortgageJeonseYN": "1", "tradingYN": "1", "issueType": "2", 
             "ePrepayNo": "", "ePrepayPass": "", "registerSummaryYN": "1", **params
         }
-        
         try:
             response = requests.post(url, headers=headers, json=payload)
             return json.loads(urllib.parse.unquote(response.text))
@@ -94,10 +83,7 @@ class OpenLawService:
         self.base_url = "http://www.law.go.kr/DRF/lawSearch.do"
 
     def get_fallback_data(self):
-        return """■ 사건명: 임대차보증금등·손해배상(기)
-■ 판결요지: 대규모 하자는 집주인(임대인)이 수선의무를 부담한다. (2011다107405)
-■ 사건명: 손해배상(기)
-■ 판결요지: 대규모 수선은 특약이 있어도 집주인이 수리해야 한다. (94다34692)"""
+        return "■ 대규모 하자는 임대인 부담입니다. (대법원 2011다107405)"
 
     def search_precedent(self, keyword="임대차 하자보수"):
         try:
@@ -107,7 +93,7 @@ class OpenLawService:
             prec_list = []
             for item in root.findall('.//prec')[:2]: 
                 title = item.findtext('사건명')
-                content = item.findtext('판결요지', default='요지 없음').replace('<![CDATA[', '').replace(']]>', '').strip()
+                content = item.findtext('판결요지', default='요지없음').replace('<![CDATA[', '').replace(']]>', '').strip()
                 prec_list.append(f"■ {title}\n{content}")
             return "\n\n".join(prec_list) if prec_list else self.get_fallback_data()
         except: return self.get_fallback_data()
@@ -126,31 +112,31 @@ async def analyze_contract(file: UploadFile = File(...)):
     try:
         contents = await file.read()
         image_part = types.Part.from_bytes(data=contents, mime_type=file.content_type)
-        prompt = "대한민국 부동산 법률 분석 AI로서 계약서를 분석하고 위험도를 평가하십시오."
-        
-        # ✨ 구관이 명관! gemini-flash-latest 모델로 원복
+        # ⚠️ 설정값(config)을 완전히 제거하고 기본값으로만 실행
         response = gemini_client.models.generate_content(
             model="gemini-flash-latest", 
-            contents=[prompt, image_part],
-            config=ai_config
+            contents=["계약서를 분석해서 안전, 주의, 위험 중 하나로 평가해줘.", image_part]
         )
         return {"analysis": response.text}
-    except Exception as e: raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e: 
+        print(f"❌ 분석 오류: {str(e)}")
+        return {"analysis": f"분석 실패: {str(e)}"}
 
 @app.post("/chat")
 async def chat_with_ai(request: ChatRequest):
     try:
         real_law_data = open_law.search_precedent("임대차 하자보수")
-        prompt = f"판례 전문가로서 다음 질문에 답하세요.\n[판례]\n{real_law_data}\n\n[상황]\n{request.analysis_context}\n\n[질문]\n{request.user_message}"
+        prompt = f"상황: {request.analysis_context}\n판례: {real_law_data}\n질문: {request.user_message}"
         
-        # ✨ 404 에러 방지를 위해 gemini-flash-latest 모델로 원복
+        # ⚠️ 여기도 설정을 모두 빼고 순수하게 텍스트만 전달
         response = gemini_client.models.generate_content(
             model="gemini-flash-latest",
-            contents=prompt,
-            config=ai_config
+            contents=prompt
         )
         return {"reply": response.text}
-    except: return {"reply": "답변 중 오류가 발생했습니다. 잠시 후 다시 질문해 주세요."}
+    except Exception as e:
+        print(f"❌ 챗봇 오류: {str(e)}")
+        return {"reply": "현재 상담이 불가능합니다. 다시 시도해 주세요."}
 
 @app.get("/ping")
 async def ping(): return {"message": "pong"}

@@ -89,10 +89,12 @@ class CodefService:
             "phoneNo": real_phone, 
             "password": encrypted_password, 
             "inquiryType": params.get("inquiryType", "3"),
-            "realtyType": "1", # 집합건물 기본값
+            "realtyType": params.get("realtyType", "1"), # ✨ 프론트엔드에서 보낸 건물 유형 적용!
             "jointMortgageJeonseYN": "1",
             "tradingYN": "1",
-            "issueType": "2", # ✨ 2: 고유번호 조회 (결제 필요 없는 무료 테스트용)
+            "issueType": "2", # 2: 고유번호 조회 (결제 안 함)
+            "ePrepayNo": "",      
+            "ePrepayPass": "",    
             "registerSummaryYN": "1",
             **params
         }
@@ -136,6 +138,7 @@ class RealEstateRequest(BaseModel):
     addr_buildingNumber: str = ""
     dong: str = ""
     ho: str = ""
+    realtyType: str = "1" # ✨ 아파트(1) / 단독주택(0) 구분값 추가
 
 class ChatRequest(BaseModel):
     user_message: str

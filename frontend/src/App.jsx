@@ -188,7 +188,78 @@ function App() {
               <ArrowLeft size={24}/> 대시보드로 돌아가기
             </button>
             
-            {/* ... (contract 뷰 생략, 그대로 유지) ... */}
+            {currentView === 'contract' && (
+              <div className="functional-layout">
+                <div className="flex-col">
+                  {!showChat ? (
+                    <section className="card">
+                      <h3 className="card-title"><Upload /> 계약서 업로드</h3>
+                      <div className="big-upload-zone">
+                        <input type="file" onChange={(e) => setFile(e.target.files[0])} id="up" hidden />
+                        <label htmlFor="up" className="drop-area">{file ? file.name : "파일을 클릭하여 선택하세요"}</label>
+                        <button onClick={handleAnalyze} className="main-btn">{loading ? "데이터 분석 엔진 가동 중..." : "AI 정밀 분석 시작"}</button>
+                      </div>
+                    </section>
+                  ) : (
+                    <section className="card scroll-y fixed-height">
+                      <h3 className="card-title">📝 계약서 요약본</h3>
+                      <div className="md-content">
+                        <ReactMarkdown>{analysis}</ReactMarkdown>
+                      </div>
+                    </section>
+                  )}
+                </div>
+
+                <div className="flex-col">
+                  {!showChat ? (
+                    <section className="card scroll-y fixed-height">
+                      <h3 className="card-title">분석 리포트</h3>
+                      <div className="md-content">
+                        {analysis ? <ReactMarkdown>{analysis}</ReactMarkdown> : "결과가 여기에 표시됩니다."}
+                      </div>
+                      
+                      {analysis && (
+                        <div className="chat-start-box">
+                          <p>분석된 계약서를 바탕으로 하자 분쟁 상담을 받아보시겠어요?</p>
+                          <button onClick={() => setShowChat(true)} className="main-btn chat-start-btn">
+                            <MessageSquare size={24} /> AI와 1:1 상담 시작하기
+                          </button>
+                        </div>
+                      )}
+                    </section>
+                  ) : (
+                    <section className="kakao-chat-container">
+                      <div className="kakao-header">
+                        <MessageSquare size={20} /> 하자 보수 및 분쟁 AI 상담
+                      </div>
+                      <div className="kakao-chat-flow" ref={scrollRef}>
+                        {messages.length === 0 && (
+                          <div className="kakao-bubble ai">
+                            안녕하세요! 왼쪽의 계약서 내용을 모두 숙지했습니다.<br/>
+                            현재 거주 중이신 곳에 어떤 하자가 발생했는지 편하게 말씀해 주세요.
+                          </div>
+                        )}
+                        {messages.map((m, i) => (
+                          <div key={i} className={`kakao-bubble ${m.role}`}>
+                            <ReactMarkdown>{m.text}</ReactMarkdown>
+                          </div>
+                        ))}
+                        {chatLoading && <div className="kakao-bubble ai">답변을 생성 중입니다...</div>}
+                      </div>
+                      <div className="kakao-input-bar">
+                        <input 
+                          value={chatInput} 
+                          onChange={(e)=>setChatInput(e.target.value)} 
+                          placeholder="메시지를 입력하세요..." 
+                          onKeyPress={(e)=>e.key==='Enter'&&handleChat()}
+                        />
+                        <button onClick={handleChat}><Send size={20} color="#333" /></button>
+                      </div>
+                    </section>
+                  )}
+                </div>
+              </div>
+            )}
 
             {currentView === 'register' && (
               <div className="functional-layout" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -284,7 +355,43 @@ function App() {
         </div>
       )}
 
-      {/* ... (플로팅 챗봇 생략, 그대로 유지) ... */}
+      {/* 🌟 여기서부터 부활한 플로팅 챗봇 위젯입니다! */}
+      <div className="floating-chat-widget">
+        {isFloatingChatOpen && (
+          <div className="floating-chat-window">
+            <div className="floating-header">
+              <span>🤖 SafeHome AI 상담원</span>
+              <button onClick={() => setIsFloatingChatOpen(false)}>✕</button>
+            </div>
+            <div className="floating-chat-flow" ref={floatingScrollRef}>
+              {messages.length === 0 && (
+                <div className="kakao-bubble ai" style={{ fontSize: '1rem', padding: '12px 16px' }}>
+                  무엇이든 물어보세요! 부동산 계약 용어나 평소 궁금했던 하자에 대해 편하게 질문해 주세요.
+                </div>
+              )}
+              {messages.map((m, i) => (
+                <div key={i} className={`kakao-bubble ${m.role}`} style={{ fontSize: '1rem', padding: '12px 16px' }}>
+                  <ReactMarkdown>{m.text}</ReactMarkdown>
+                </div>
+              ))}
+              {chatLoading && <div className="kakao-bubble ai" style={{ fontSize: '1rem' }}>답변 생성 중...</div>}
+            </div>
+            <div className="floating-input-bar">
+              <input 
+                value={chatInput} 
+                onChange={(e)=>setChatInput(e.target.value)} 
+                placeholder="질문을 입력하세요..." 
+                onKeyPress={(e)=>e.key==='Enter'&&handleChat()}
+              />
+              <button onClick={handleChat}><Send size={18} color="#333" /></button>
+            </div>
+          </div>
+        )}
+        <button className="floating-chat-btn" onClick={() => setIsFloatingChatOpen(!isFloatingChatOpen)}>
+          <MessageSquare size={34} color="#131314" />
+        </button>
+      </div>
+
     </div>
   );
 }

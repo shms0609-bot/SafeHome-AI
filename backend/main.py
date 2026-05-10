@@ -7,6 +7,7 @@ import requests
 import base64
 import urllib.parse
 import json
+import xml.etree.ElementTree as ET # ✨ 법제처 XML 데이터 파서 추가됨
 from dotenv import load_dotenv
 
 from Crypto.PublicKey import RSA
@@ -74,7 +75,6 @@ class CodefService:
         real_phone = os.getenv("REAL_ESTATE_PHONE", "01000000000")
         raw_password = os.getenv("REAL_ESTATE_PASSWORD", "1234")
         
-        # 🌟 대법원 매뉴얼 필수 조건: 비밀번호는 무조건 4자리 숫자여야 함
         if len(raw_password) != 4 or not raw_password.isdigit():
             print(f"⚠️ 경고: 설정된 비밀번호가 4자리 숫자가 아닙니다. 기본값 1234로 대체합니다.")
             raw_password = "1234"
@@ -89,10 +89,10 @@ class CodefService:
             "phoneNo": real_phone, 
             "password": encrypted_password, 
             "inquiryType": params.get("inquiryType", "3"),
-            "realtyType": params.get("realtyType", "1"), # ✨ 프론트엔드에서 보낸 건물 유형 적용!
+            "realtyType": params.get("realtyType", "1"),
             "jointMortgageJeonseYN": "1",
             "tradingYN": "1",
-            "issueType": "2", # 2: 고유번호 조회 (결제 안 함)
+            "issueType": "2", 
             "ePrepayNo": "",      
             "ePrepayPass": "",    
             "registerSummaryYN": "1",
@@ -119,7 +119,6 @@ class CodefService:
                         "raw_response": decoded_text[:200]
                     }
             
-            # 추가 인증이 필요한 경우 (CF-03002)
             if res_data.get("result", {}).get("code") == "CF-03002":
                 return {"status": "NEED_2WAY", "data": res_data.get("data")}
                 
@@ -130,7 +129,40 @@ class CodefService:
 
 codef = CodefService()
 
-# 🌟 대법원 규격에 맞게 파라미터 분리 (inquiryType 3 기준)
+
+# ✨ 국가법령정보 API 연동 클래스 추가됨
+class OpenLawService:
+    def __init__(self):
+        self.api_key = os.getenv("OPEN_LAW_API_KEY")
+        self.base_url = "https://www.law.go.kr/DRF/lawSearch.do"
+
+    def search_precedent(self, keyword="임대차 하자"):
+        if not self.api_key:
+            return "국가법령정보 API 키가 설정되지 않았습니다."
+        
+        try:
+            url = f"{self.base_url}?OC={self.api_key}&target=prec&type=XML&query={urllib.parse.quote(keyword)}"
+            response = requests.get(url)
+            
+            root = ET.fromstring(response.text)
+            
+            prec_list = []
+            for item in root.findall('.//prec')[:2]: 
+                title = item.findtext('사건명', default='제목 없음')
+                content = item.findtext('판결요지', default='요지 없음')
+                
+                content = content.replace('<![CDATA[', '').replace(']]>', '').strip()
+                prec_list.append(f"■ 사건명: {title}\n■ 판결요지: {content}")
+            
+            return "\n\n".join(prec_list) if prec_list else "관련 판례를 찾을 수 없습니다."
+            
+        except Exception as e:
+            print(f"❌ 판례 검색 오류: {str(e)}")
+            return "판례 정보를 불러오는 데 실패했습니다."
+
+open_law = OpenLawService()
+
+
 class RealEstateRequest(BaseModel):
     addr_sido: str
     addr_sigungu: str
@@ -138,7 +170,7 @@ class RealEstateRequest(BaseModel):
     addr_buildingNumber: str = ""
     dong: str = ""
     ho: str = ""
-    realtyType: str = "1" # ✨ 아파트(1) / 단독주택(0) 구분값 추가
+    realtyType: str = "1" 
 
 class ChatRequest(BaseModel):
     user_message: str
@@ -202,27 +234,30 @@ async def analyze_contract(file: UploadFile = File(...)):
         print(f"❌ 분석 중 서버 에러 발생: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
+# ✨ 챗봇 부분: 판례 데이터 검색 및 프롬프트 주입 로직 추가됨
 @app.post("/chat")
 async def chat_with_ai(request: ChatRequest):
     if not gemini_client:
         raise HTTPException(status_code=500, detail="Gemini API 키 오류")
         
     try:
+        real_law_data = open_law.search_precedent("임대차 하자보수")
+        
         system_instruction = f"""
         당신은 SafeHome AI 임대차 하자 보수 분쟁 분석 전문가입니다.
         
         [배경 정보: 계약서 분석 결과]
         {request.analysis_context}
 
-        [작동 알고리즘: 단계별 질문 시스템]
-        사용자가 하자를 언급하면 즉시 판별하지 말고, 다음 질문을 한 번에 하나씩 차례대로 던져 사실관계를 먼저 확인하라.
-        
-        1단계 (발생 시점): "입주 시점부터 그랬나요, 아니면 거주 중에 발생했나요?"
-        2단계 (부위 및 상태): "구체적인 위치가 어디이며, 소모품인가요 아니면 대규모 시설물인가요?"
-        3단계 (관리 노력): "하자를 발견하고 임대인에게 즉시 알렸나요? 직접 조치한 사항이 있나요?"
+        [🚨 국가법령정보센터 실제 대법원 판례 (절대적 기준)]
+        아래는 방금 대한민국 법제처 서버에서 실시간으로 가져온 관련 판례 원문입니다.
+        {real_law_data}
 
-        [최종 종합 분석 가이드라인]
-        3단계 답변이 모두 완료되면 법리(민법 제623조, 제374조 등)를 바탕으로 분석 결과를 요약해 주십시오.
+        [작동 알고리즘 및 지시사항]
+        1. 사용자의 질문에 답변할 때, 자신의 얕은 지식이나 추측이 아닌 **위 [국가법령정보센터 실제 대법원 판례]의 '사건명'과 '판결요지'를 반드시 인용**하여 답변하십시오.
+        2. 판례의 법리를 일반인이 이해하기 쉬운 말로 풀어서 설명해 주십시오.
+        3. 만약 하자에 대한 사실관계 확인이 더 필요하다면 추가 질문(언제 발생했는지 등)을 던지십시오.
         """
         response = gemini_client.models.generate_content(
             model="gemini-flash-latest",

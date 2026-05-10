@@ -130,7 +130,7 @@ class CodefService:
 codef = CodefService()
 
 
-# ✨ 국가법령정보 API 연동 클래스 추가됨
+# ✨ 국가법령정보 API 연동 클래스 (봇 차단 우회 코드 추가됨)
 class OpenLawService:
     def __init__(self):
         self.api_key = os.getenv("OPEN_LAW_API_KEY")
@@ -142,7 +142,14 @@ class OpenLawService:
         
         try:
             url = f"{self.base_url}?OC={self.api_key}&target=prec&type=XML&query={urllib.parse.quote(keyword)}"
-            response = requests.get(url)
+            
+            # ✨ 핵심 해결책: 크롬 브라우저인 척 위장하는 헤더 추가
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+            }
+            
+            # ✨ 위장 헤더를 달아서 요청을 보냅니다!
+            response = requests.get(url, headers=headers)
             
             root = ET.fromstring(response.text)
             

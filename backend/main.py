@@ -155,7 +155,8 @@ async def ping():
 
 @app.post("/fetch-real-estate")
 async def fetch_info(request: RealEstateRequest):
-    print(f"🏢 실시간 조회 요청 수신: {request.addr_sido} {request.addr_sigungu} {request.addr_roadName}")
+    # 건물 번호와 동/호수까지 터미널에 찍히도록 수정된 버전
+    print(f"🏢 실시간 조회 요청 수신: {request.addr_sido} {request.addr_sigungu} {request.addr_roadName} {request.addr_buildingNumber} {request.dong}동 {request.ho}호")
     result = codef.get_real_estate_register(request.dict())
     return result
 
@@ -197,8 +198,10 @@ async def analyze_contract(file: UploadFile = File(...)):
         ### 💡 AI 종합 조언 (주의 깊게 봐야 할 부분)
         > (세입자 입장에서 이 계약을 진행할 때 반드시 확인해야 할 실질적인 조언, 팁, 주의사항을 3~4문장으로 길고 상세하게 풀어쓰십시오.)
         """
+        
+        # ✨ 모델명 수정: gemini-1.5-flash
         response = gemini_client.models.generate_content(
-            model="gemini-1.5-flash-latest", 
+            model="gemini-1.5-flash", 
             contents=[prompt, image_part]
         )
         return {"analysis": response.text}
@@ -226,9 +229,9 @@ async def chat_with_ai(request: ChatRequest):
         2. 임대차 보호법 등 일반적인 법리나 상식을 바탕으로 일반인이 이해하기 쉬운 말로 풀어서 설명해 주십시오.
         """
         
-        # 최신 모델 및 토큰/프롬프트 분리 적용 완료
+        # ✨ 모델명 수정: gemini-1.5-flash
         response = gemini_client.models.generate_content(
-            model="gemini-1.5-flash-latest", 
+            model="gemini-1.5-flash", 
             contents=request.user_message,
             config=types.GenerateContentConfig(
                 system_instruction=sys_instruct,

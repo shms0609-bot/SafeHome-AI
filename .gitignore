@@ -1,0 +1,13 @@
+# 환경변수 파일 (API 키 등)
+.env
+backend/.env
+
+# 가상환경 폴더 (용량 낭비 방지)
+venv/
+backend/venv/
+
+# 파이썬 캐시 파일
+__pycache__/
+
+# Node.js 패키지 (package.json이 있으므로 추가)
+node_modules/

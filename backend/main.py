@@ -7,16 +7,17 @@ import requests
 import base64
 import urllib.parse
 import json
-import xml.etree.ElementTree as ET # ✨ 법제처 XML 데이터 파서 추가됨
 from dotenv import load_dotenv
 
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_v1_5
 
+# 1. .env 파일에서 환경 변수(API 키 등)를 안전하게 불러옵니다.
 load_dotenv()
 
 app = FastAPI()
 
+# CORS 설정 (프론트엔드와 통신 허용)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -25,13 +26,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# 2. 하드코딩된 키 대신 os.getenv를 사용하여 안전하게 키를 가져옵니다.
 api_key = os.getenv("GEMINI_API_KEY")
 if api_key:
     print(f"✅ 성공: API KEY 로드 완료 ({api_key[:10]}...)")
 else:
     print("❌ 에러: GEMINI_API_KEY가 .env 파일에 없습니다.")
 
+# 제미나이 클라이언트 초기화
 gemini_client = Client(api_key=api_key) if api_key else None
+
 
 class CodefService:
     def __init__(self):
@@ -129,47 +133,7 @@ class CodefService:
 
 codef = CodefService()
 
-
-# ✨ 국가법령정보 API 연동 클래스 (봇 차단 우회 코드 추가됨)
-class OpenLawService:
-    def __init__(self):
-        self.api_key = os.getenv("OPEN_LAW_API_KEY")
-        self.base_url = "https://www.law.go.kr/DRF/lawSearch.do"
-
-    def search_precedent(self, keyword="임대차 하자"):
-        if not self.api_key:
-            return "국가법령정보 API 키가 설정되지 않았습니다."
-        
-        try:
-            url = f"{self.base_url}?OC={self.api_key}&target=prec&type=XML&query={urllib.parse.quote(keyword)}"
-            
-            # ✨ 핵심 해결책: 크롬 브라우저인 척 위장하는 헤더 추가
-            headers = {
-                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-            }
-            
-            # ✨ 위장 헤더를 달아서 요청을 보냅니다!
-            response = requests.get(url, headers=headers)
-            
-            root = ET.fromstring(response.text)
-            
-            prec_list = []
-            for item in root.findall('.//prec')[:2]: 
-                title = item.findtext('사건명', default='제목 없음')
-                content = item.findtext('판결요지', default='요지 없음')
-                
-                content = content.replace('<![CDATA[', '').replace(']]>', '').strip()
-                prec_list.append(f"■ 사건명: {title}\n■ 판결요지: {content}")
-            
-            return "\n\n".join(prec_list) if prec_list else "관련 판례를 찾을 수 없습니다."
-            
-        except Exception as e:
-            print(f"❌ 판례 검색 오류: {str(e)}")
-            return "판례 정보를 불러오는 데 실패했습니다."
-
-open_law = OpenLawService()
-
-
+# API 요청 형식을 정의하는 Pydantic 모델
 class RealEstateRequest(BaseModel):
     addr_sido: str
     addr_sigungu: str
@@ -183,6 +147,8 @@ class ChatRequest(BaseModel):
     user_message: str
     analysis_context: str
 
+# --- API 엔드포인트 ---
+
 @app.get("/ping")
 async def ping():
     return {"message": "pong"}
@@ -195,7 +161,7 @@ async def fetch_info(request: RealEstateRequest):
 
 @app.post("/analyze")
 async def analyze_contract(file: UploadFile = File(...)):
-    print(f"--- 📥 분석 요청 수신: {file.filename} ---")
+    print(f"--- 📥 계약서 분석 요청 수신: {file.filename} ---")
     if not gemini_client:
         raise HTTPException(status_code=500, detail="Gemini API 키 오류")
         
@@ -232,7 +198,7 @@ async def analyze_contract(file: UploadFile = File(...)):
         > (세입자 입장에서 이 계약을 진행할 때 반드시 확인해야 할 실질적인 조언, 팁, 주의사항을 3~4문장으로 길고 상세하게 풀어쓰십시오.)
         """
         response = gemini_client.models.generate_content(
-            model="gemini-flash-latest", 
+            model="gemini-1.5-flash-latest", 
             contents=[prompt, image_part]
         )
         return {"analysis": response.text}
@@ -241,35 +207,37 @@ async def analyze_contract(file: UploadFile = File(...)):
         print(f"❌ 분석 중 서버 에러 발생: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
-
-# ✨ 챗봇 부분: 판례 데이터 검색 및 프롬프트 주입 로직 추가됨
 @app.post("/chat")
 async def chat_with_ai(request: ChatRequest):
+    print(f"--- 💬 챗봇 요청 수신: {request.user_message[:20]}... ---") 
+    
     if not gemini_client:
         raise HTTPException(status_code=500, detail="Gemini API 키 오류")
         
     try:
-        real_law_data = open_law.search_precedent("임대차 하자보수")
-        
-        system_instruction = f"""
-        당신은 SafeHome AI 임대차 하자 보수 분쟁 분석 전문가입니다.
+        sys_instruct = f"""
+        당신은 SafeHome AI 임대차 분쟁 및 전세 사기 예방 분석 전문가입니다.
         
         [배경 정보: 계약서 분석 결과]
         {request.analysis_context}
 
-        [🚨 국가법령정보센터 실제 대법원 판례 (절대적 기준)]
-        아래는 방금 대한민국 법제처 서버에서 실시간으로 가져온 관련 판례 원문입니다.
-        {real_law_data}
-
         [작동 알고리즘 및 지시사항]
-        1. 사용자의 질문에 답변할 때, 자신의 얕은 지식이나 추측이 아닌 **위 [국가법령정보센터 실제 대법원 판례]의 '사건명'과 '판결요지'를 반드시 인용**하여 답변하십시오.
-        2. 판례의 법리를 일반인이 이해하기 쉬운 말로 풀어서 설명해 주십시오.
-        3. 만약 하자에 대한 사실관계 확인이 더 필요하다면 추가 질문(언제 발생했는지 등)을 던지십시오.
+        1. 사용자의 질문에 답변할 때, 위 [계약서 분석 결과]를 바탕으로 세입자에게 가장 유리하고 안전한 방향으로 조언하십시오.
+        2. 임대차 보호법 등 일반적인 법리나 상식을 바탕으로 일반인이 이해하기 쉬운 말로 풀어서 설명해 주십시오.
         """
+        
+        # 최신 모델 및 토큰/프롬프트 분리 적용 완료
         response = gemini_client.models.generate_content(
-            model="gemini-flash-latest",
-            contents=[system_instruction, request.user_message]
+            model="gemini-1.5-flash-latest", 
+            contents=request.user_message,
+            config=types.GenerateContentConfig(
+                system_instruction=sys_instruct,
+                max_output_tokens=2048, 
+                temperature=0.7
+            )
         )
         return {"reply": response.text}
+        
     except Exception as e:
+        print(f"❌ 챗봇 서버 에러 상세: {str(e)}") 
         raise HTTPException(status_code=500, detail=str(e))

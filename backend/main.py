@@ -1,42 +1,67 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from google.genai import Client, types
 import os
 import requests
 import base64
 import urllib.parse
 import json
+from datetime import datetime
+from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel
+from google.genai import Client, types
 from dotenv import load_dotenv
 
 from Crypto.PublicKey import RSA
 from Crypto.Cipher import PKCS1_v1_5
 
-# 1. .env 파일에서 환경 변수(API 키 등)를 안전하게 불러옵니다.
-load_dotenv()
+from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.orm import sessionmaker, Session
 
-app = FastAPI()
+# 🌟 수정 1: 환경 변수 강제 새로고침 옵션 (override=True)
+load_dotenv(override=True)
 
-# CORS 설정 (프론트엔드와 통신 허용)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# ==========================================
+# 🌟 1. DB 설정 (SQLAlchemy)
+# ==========================================
+SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL")
+if SQLALCHEMY_DATABASE_URL and SQLALCHEMY_DATABASE_URL.startswith("postgres://"):
+    SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
-# 2. 하드코딩된 키 대신 os.getenv를 사용하여 안전하게 키를 가져옵니다.
-api_key = os.getenv("GEMINI_API_KEY")
-if api_key:
-    print(f"✅ 성공: API KEY 로드 완료 ({api_key[:10]}...)")
-else:
-    print("❌ 에러: GEMINI_API_KEY가 .env 파일에 없습니다.")
+engine = create_engine(SQLALCHEMY_DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
 
-# 제미나이 클라이언트 초기화
-gemini_client = Client(api_key=api_key) if api_key else None
+class UserTable(Base):
+    __tablename__ = "users"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, unique=True, index=True)
+    password = Column(String)
+    username = Column(String)
 
+class RealEstateHistoryTable(Base):
+    __tablename__ = "real_estate_history"
+    id = Column(Integer, primary_key=True, index=True)
+    owner_id = Column(String, index=True) 
+    address = Column(String)               
+    pdf_base64 = Column(Text)              
+    created_at = Column(DateTime, default=datetime.now)
 
+try:
+    Base.metadata.create_all(bind=engine)
+    print("✅ DB 연동 및 테이블 생성 성공")
+except Exception as e:
+    print(f"❌ DB 연동 실패: {str(e)}")
+
+def get_db():
+    db = SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+# ==========================================
+# 🌟 2. CODEF API 서비스
+# ==========================================
 class CodefService:
     def __init__(self):
         self.client_id = os.getenv("CODEF_CLIENT_ID")
@@ -45,18 +70,14 @@ class CodefService:
         self.base_url = "https://development.codef.io/v1" 
 
     def encrypt_rsa(self, text: str) -> str:
-        if not self.public_key:
-            print("⚠️ 에러: .env 파일에 CODEF_PUBLIC_KEY가 없습니다.")
-            return ""
+        if not self.public_key: return ""
         try:
             key_der = base64.b64decode(self.public_key)
             key_pub = RSA.import_key(key_der)
             cipher = PKCS1_v1_5.new(key_pub)
             encrypted = cipher.encrypt(text.encode('utf-8'))
             return base64.b64encode(encrypted).decode('utf-8')
-        except Exception as e:
-            print(f"❌ RSA 암호화 실패: {str(e)}")
-            return ""
+        except: return ""
 
     def get_access_token(self):
         try:
@@ -67,23 +88,32 @@ class CodefService:
             data = {"grant_type": "client_credentials"}
             response = requests.post(url, headers=headers, data=data)
             return response.json().get("access_token")
-        except Exception as e:
-            print(f"❌ CODEF 토큰 발급 에러: {str(e)}")
-            return None
+        except: return None
 
     def get_real_estate_register(self, params: dict):
         token = self.get_access_token()
-        if not token: 
-            return {"error": "CODEF API 토큰 발급 실패. .env 파일을 확인하세요."}
+        if not token: return {"error": "CODEF 토큰 발급 실패"}
         
         real_phone = os.getenv("REAL_ESTATE_PHONE", "01000000000")
         raw_password = os.getenv("REAL_ESTATE_PASSWORD", "1234")
-        
-        if len(raw_password) != 4 or not raw_password.isdigit():
-            print(f"⚠️ 경고: 설정된 비밀번호가 4자리 숫자가 아닙니다. 기본값 1234로 대체합니다.")
-            raw_password = "1234"
-            
         encrypted_password = self.encrypt_rsa(raw_password)
+        
+        # .env 파일에서 가져오기
+        e_prepay_no = os.getenv("E_PREPAY_NO", "").replace("-", "").strip()
+        e_prepay_pass = os.getenv("E_PREPAY_PASS", "").strip()
+        
+        # 🌟 수정 2: 만약 .env 파일 적용이 안 돼서 또 똑같은 에러가 난다면,
+        # 아래 두 줄의 제일 앞 '#' 기호를 지우고 강제로 번호를 코드에 박아버리세요! (하드코딩)
+        # e_prepay_no = "H82003788709"
+        # e_prepay_pass = "160212"
+        
+        print(f"\n--- 🕵️ 결제 정보 체크 ---")
+        print(f"전송할 캐시 번호 길이: {len(e_prepay_no)} (12자리 필수)")
+        print(f"전송할 캐시 비번 길이: {len(e_prepay_pass)} (4~6자리 필수)")
+        print(f"---------------------------\n")
+
+        if not e_prepay_no:
+            return {"error": ".env 파일에서 캐시 번호를 못 읽어왔습니다! VS Code 터미널을 완전히 껐다 켜주세요."}
         
         url = f"{self.base_url}/kr/public/ck/real-estate-register/status" 
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
@@ -96,45 +126,36 @@ class CodefService:
             "realtyType": params.get("realtyType", "1"),
             "jointMortgageJeonseYN": "1",
             "tradingYN": "1",
-            "issueType": "2", 
-            "ePrepayNo": "",      
-            "ePrepayPass": "",    
+            "issueType": "0",         
+            "originDataYN": "1",      
             "registerSummaryYN": "1",
+            "ePrepayNo": e_prepay_no,
+            "ePrepayPass": e_prepay_pass,  # 암호화 없이 Plain Text 전송
             **params
         }
         
         try:
             response = requests.post(url, headers=headers, json=payload)
-            decoded_text = urllib.parse.unquote(response.text)
-            
-            print(f"\n--- 🏢 CODEF API 응답 로그 ---")
-            print(f"상태 코드: {response.status_code}")
-            print(f"해독된 응답: {decoded_text[:300]}...") 
-            print(f"--------------------------------\n")
-            
-            try:
-                res_data = json.loads(decoded_text)
-            except json.JSONDecodeError:
-                try:
-                    res_data = response.json()
-                except ValueError:
-                    return {
-                        "error": "해독 실패: 알 수 없는 응답 규격입니다.", 
-                        "raw_response": decoded_text[:200]
-                    }
-            
-            if res_data.get("result", {}).get("code") == "CF-03002":
-                return {"status": "NEED_2WAY", "data": res_data.get("data")}
-                
-            return res_data
-            
+            return json.loads(urllib.parse.unquote(response.text))
         except Exception as e:
-            return {"error": f"백엔드 통신 에러: {str(e)}"}
+            return {"error": str(e)}
 
 codef = CodefService()
 
-# API 요청 형식을 정의하는 Pydantic 모델
+# ==========================================
+# 🌟 3. 데이터 모델 및 API
+# ==========================================
+class UserRegister(BaseModel):
+    user_id: str
+    password: str
+    username: str = None
+
+class LoginRequest(BaseModel):
+    user_id: str
+    password: str
+
 class RealEstateRequest(BaseModel):
+    user_id: str 
     addr_sido: str
     addr_sigungu: str
     addr_roadName: str = ""
@@ -147,99 +168,73 @@ class ChatRequest(BaseModel):
     user_message: str
     analysis_context: str
 
-# --- API 엔드포인트 ---
+app = FastAPI()
+app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-@app.get("/ping")
-async def ping():
-    return {"message": "pong"}
+api_key = os.getenv("GEMINI_API_KEY")
+gemini_client = Client(api_key=api_key) if api_key else None
+
+@app.post("/register")
+async def register(user_data: UserRegister, db: Session = Depends(get_db)):
+    existing = db.query(UserTable).filter(UserTable.user_id == user_data.user_id).first()
+    if existing: raise HTTPException(status_code=400, detail="이미 존재하는 아이디입니다.")
+    new_user = UserTable(user_id=user_data.user_id, password=user_data.password, username=user_data.username or user_data.user_id)
+    db.add(new_user); db.commit(); return {"message": "가입 성공"}
+
+@app.post("/login")
+async def login(req: LoginRequest, db: Session = Depends(get_db)):
+    user = db.query(UserTable).filter(UserTable.user_id == req.user_id, UserTable.password == req.password).first()
+    if not user: raise HTTPException(status_code=401, detail="정보 불일치")
+    return {"access_token": "valid"}
 
 @app.post("/fetch-real-estate")
-async def fetch_info(request: RealEstateRequest):
-    print(f"🏢 실시간 조회 요청 수신: {request.addr_sido} {request.addr_sigungu} {request.addr_roadName} {request.addr_buildingNumber} {request.dong}동 {request.ho}호")
-    result = codef.get_real_estate_register(request.dict())
-    return result
+async def fetch_info(request: RealEstateRequest, db: Session = Depends(get_db)):
+    codef_params = request.dict()
+    user_id = codef_params.pop("user_id", None)
+    
+    res = codef.get_real_estate_register(codef_params)
+    
+    if res.get("data"):
+        data_obj = res["data"][0] if isinstance(res["data"], list) else res["data"]
+        pdf_data = data_obj.get("resOriGinalData") or data_obj.get("resoriGinalData")
+        
+        if pdf_data:
+            full_addr = f"{request.addr_sido} {request.addr_roadName} {request.addr_buildingNumber} {request.dong} {request.ho}".strip()
+            new_history = RealEstateHistoryTable(
+                owner_id=user_id,
+                address=full_addr,
+                pdf_base64=pdf_data
+            )
+            db.add(new_history)
+            db.commit()
+            
+    return res
+
+@app.get("/real-estate-history/{user_id}")
+async def get_history(user_id: str, db: Session = Depends(get_db)):
+    histories = db.query(RealEstateHistoryTable).filter(RealEstateHistoryTable.owner_id == user_id).order_by(RealEstateHistoryTable.created_at.desc()).all()
+    return histories
 
 @app.post("/analyze")
 async def analyze_contract(file: UploadFile = File(...)):
-    print(f"--- 📥 계약서 분석 요청 수신: {file.filename} ---")
-    if not gemini_client:
-        raise HTTPException(status_code=500, detail="Gemini API 키 오류")
-        
+    if not gemini_client: raise HTTPException(status_code=500, detail="Gemini API 키 오류")
     try:
         contents = await file.read()
         image_part = types.Part.from_bytes(data=contents, mime_type=file.content_type)
-        
-        prompt = """
-        귀하는 대한민국 부동산 법률 분석 AI입니다.
-        업로드된 계약서 이미지를 바탕으로 정밀 분석을 수행하고, 사용자가 시각적으로 이해하기 쉽도록 풍부하고 상세한 리포트를 작성하십시오.
-
-        [분석 리포트 필수 출력 형식]
-        반드시 아래의 마크다운 형식을 엄격하게 지켜서 답변하십시오.
-
-        ### 🚨 종합 위험도 평가
-        (계약서의 전반적인 상태를 평가하여 다음 중 하나를 큰 글씨로 출력: 🟢 **[안전]** / 🟡 **[주의]** / 🔴 **[위험]**)
-        - **판단 사유**: (위험도를 이렇게 평가한 핵심 이유를 2~3줄로 상세히 설명)
-
-        ---
-
-        ### 🔍 핵심 체크포인트 상세 분석
-        **1. 임대인 및 소유주 정보**
-        - (일치 여부 및 상세 설명, 계약 시 주의할 점 등 2~3문장 이상 상세히 작성)
-
-        **2. 계약 면적 및 대상물 정확성**
-        - (공부상 면적과 계약서상 면적의 일치 여부, 수치 모순 여부 등 상세히 작성)
-
-        **3. 하자 보수 및 특약 사항**
-        - (현재 특약의 유무, 세입자에게 불리한 독소조항 여부, 추가해야 할 특약 조언 등 상세히 작성)
-
-        ---
-
-        ### 💡 AI 종합 조언 (주의 깊게 봐야 할 부분)
-        > (세입자 입장에서 이 계약을 진행할 때 반드시 확인해야 할 실질적인 조언, 팁, 주의사항을 3~4문장으로 길고 상세하게 풀어쓰십시오.)
-        """
-        
-        # ✨ 구글의 최신 공식 모델명으로 변경 완료
-        response = gemini_client.models.generate_content(
-            model="gemini-2.5-flash", 
-            contents=[prompt, image_part]
-        )
+        prompt = "귀하는 대한민국 부동산 법률 분석 AI입니다. 계약서 이미지를 정밀 분석하여 위험도를 평가하고 마크다운 리포트를 작성하세요."
+        response = gemini_client.models.generate_content(model="gemini-1.5-flash", contents=[prompt, image_part])
         return {"analysis": response.text}
-        
-    except Exception as e:
-        print(f"❌ 분석 중 서버 에러 발생: {str(e)}")
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e: raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/chat")
 async def chat_with_ai(request: ChatRequest):
-    print(f"--- 💬 챗봇 요청 수신: {request.user_message[:20]}... ---") 
-    
-    if not gemini_client:
-        raise HTTPException(status_code=500, detail="Gemini API 키 오류")
-        
+    if not gemini_client: raise HTTPException(status_code=500, detail="Gemini API 키 오류")
     try:
-        sys_instruct = f"""
-        당신은 SafeHome AI 임대차 분쟁 및 전세 사기 예방 분석 전문가입니다.
-        
-        [배경 정보: 계약서 분석 결과]
-        {request.analysis_context}
-
-        [작동 알고리즘 및 지시사항]
-        1. 사용자의 질문에 답변할 때, 위 [계약서 분석 결과]를 바탕으로 세입자에게 가장 유리하고 안전한 방향으로 조언하십시오.
-        2. 임대차 보호법 등 일반적인 법리나 상식을 바탕으로 일반인이 이해하기 쉬운 말로 풀어서 설명해 주십시오.
-        """
-        
-        # ✨ 구글의 최신 공식 모델명으로 변경 완료
+        sys_instruct = f"당신은 SafeHome AI 임대차 분쟁 전문가입니다. 다음 분석 결과를 바탕으로 상담하세요: {request.analysis_context}"
         response = gemini_client.models.generate_content(
-            model="gemini-2.5-flash", 
+            model="gemini-1.5-flash", 
             contents=request.user_message,
-            config=types.GenerateContentConfig(
-                system_instruction=sys_instruct,
-                max_output_tokens=2048, 
-                temperature=0.7
-            )
+            config=types.GenerateContentConfig(system_instruction=sys_instruct, max_output_tokens=2048, temperature=0.7)
         )
         return {"reply": response.text}
-        
-    except Exception as e:
-        print(f"❌ 챗봇 서버 에러 상세: {str(e)}") 
-        raise HTTPException(status_code=500, detail=str(e))
+    except Exception as e: raise HTTPException(status_code=500, detail=str(e))

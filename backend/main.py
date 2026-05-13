@@ -215,7 +215,7 @@ async def analyze_contract(file: UploadFile = File(...)):
         while attempts < len(api_keys_list):
             try:
                 client = Client(api_key=api_keys_list[current_key_index])
-                response = client.models.generate_content(model="gemini-2.0-flash", contents=[prompt, image_part])
+                response = client.models.generate_content(model="gemini-2.5-flash", contents=[prompt, image_part])
                 return {"analysis": response.text}
             
             except Exception as e:
@@ -250,7 +250,7 @@ async def chat_with_ai(request: ChatRequest):
             try:
                 client = Client(api_key=api_keys_list[current_key_index])
                 response = client.models.generate_content(
-                    model="gemini-2.0-flash", 
+                    model="gemini-2.5-flash", 
                     contents=request.user_message,
                     config=types.GenerateContentConfig(system_instruction=sys_instruct, max_output_tokens=2048, temperature=0.7)
                 )

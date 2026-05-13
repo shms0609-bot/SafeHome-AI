@@ -6,6 +6,20 @@ import './App.css';
 
 const API_BASE_URL = "https://safehome-ai-pkkv.onrender.com"; 
 
+// 🌟 [추가된 기능] 숫자를 한국식 '억, 만' 단위로 예쁘게 바꿔주는 함수
+const formatKoreanPrice = (priceStr) => {
+  const num = Number(priceStr);
+  if (!num || num === 0) return "-"; // 0원이거나 데이터가 없으면 '-' 표시
+  
+  const eok = Math.floor(num / 10000); // 10000으로 나눈 몫은 '억'
+  const man = num % 10000;             // 나머지는 '만'
+  
+  if (eok > 0) {
+    return man > 0 ? `${eok}억 ${man.toLocaleString()}만원` : `${eok}억원`;
+  }
+  return `${man.toLocaleString()}만원`;
+};
+
 function Login({ onLoginSuccess }) {
   const [isRegisterMode, setIsRegisterMode] = useState(false);
   const [id, setId] = useState("");
@@ -83,7 +97,7 @@ function App() {
   const [regRealtyType, setRegRealtyType] = useState("1");
   const [regHistory, setRegHistory] = useState([]); 
 
-  // 🌟 단지검색 & 시세조회 State 통합
+  // 단지검색 & 시세조회 State
   const [searchSido, setSearchSido] = useState("");
   const [searchSigun, setSearchSigun] = useState("");
   const [searchDong, setSearchDong] = useState("");
@@ -205,7 +219,6 @@ function App() {
     downloadLink.click();
   };
 
-  // 🌟 단지 목록 검색 핸들러
   const handleSearchEstates = async () => {
     if (!searchSido || !searchSigun || !searchDong) return alert("시/도, 시/군/구, 읍/면/동을 모두 입력해주세요.");
     setEstateLoading(true); setEstateList([]); setMarketResult(null);
@@ -217,7 +230,6 @@ function App() {
       });
       const data = await res.json();
       if (data.data) {
-        // 단건 객체일 경우 배열로 강제 변환하여 화면에 렌더링하기 쉽게 만듭니다.
         setEstateList(Array.isArray(data.data) ? data.data : [data.data]);
       } else {
         alert("해당 지역에 검색된 단지가 없습니다.");
@@ -225,7 +237,6 @@ function App() {
     } catch (err) { alert("단지 검색 실패!"); } finally { setEstateLoading(false); }
   };
 
-  // 🌟 특정 단지 선택 시 시세 조회 핸들러
   const handleFetchMarketPrice = async (complexNo) => {
     setMarketLoading(true); setMarketResult(null);
     try {
@@ -236,7 +247,6 @@ function App() {
       });
       const data = await res.json();
       setMarketResult(data);
-      // 스크롤을 결과화면으로 부드럽게 내리기
       setTimeout(() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }), 100);
     } catch (err) { alert("시세 조회 실패!"); } finally { setMarketLoading(false); }
   };
@@ -430,7 +440,7 @@ function App() {
           </div>
         )}
 
-        {/* 🌟 1단계: 단지 검색 -> 2단계: 시세 표시로 업그레이드된 화면 */}
+        {/* 시세 조회 화면 */}
         {currentView === 'market' && (
           <div className="fade-in" style={{ flex: 1, padding: '40px', overflowY: 'auto' }}>
             <button className="back-btn" onClick={() => setCurrentView('home')}><ArrowLeft size={20}/> 뒤로가기</button>
@@ -438,7 +448,6 @@ function App() {
               <section className="card" style={{ padding: '40px' }}>
                 <h3 className="card-title" style={{ color: 'var(--accent)', marginBottom: '30px' }}><TrendingUp /> 아파트 시세 조회</h3>
                 
-                {/* 🌟 주소 입력창 추가 */}
                 <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
                   <input placeholder="시/도 (예: 서울특별시)" value={searchSido} onChange={(e) => setSearchSido(e.target.value)} style={{ flex: 1, padding: '15px', borderRadius: '10px', border: '1px solid var(--border)' }} />
                   <input placeholder="시/군/구 (예: 송파구)" value={searchSigun} onChange={(e) => setSearchSigun(e.target.value)} style={{ flex: 1, padding: '15px', borderRadius: '10px', border: '1px solid var(--border)' }} />
@@ -448,7 +457,6 @@ function App() {
                   {estateLoading ? "단지 목록을 찾는 중..." : "해당 지역 단지 검색하기"}
                 </button>
                 
-                {/* 🌟 단지 검색 결과 리스트 */}
                 {estateList.length > 0 && !marketResult && (
                   <div className="fade-in">
                     <h4 style={{ marginBottom: '15px', color: 'var(--text)' }}>검색된 단지 목록 ({estateList.length}건)</h4>
@@ -468,7 +476,7 @@ function App() {
 
                 {marketLoading && <div style={{ textAlign: 'center', padding: '30px', color: '#888' }}>단지 시세 정보를 대법원 캐시에서 불러오고 있습니다...</div>}
                 
-                {/* 🌟 시세 상세 결과 화면 */}
+                {/* 🌟 예쁘게 변환된 단위가 적용되는 부분 */}
                 {marketResult && marketResult.data && (
                   <div className="fade-in" style={{ marginTop: '20px', borderTop: '2px solid var(--border)', paddingTop: '30px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '20px' }}>
@@ -493,11 +501,16 @@ function App() {
                           <div style={{ flex: 2, display: 'flex', gap: '20px', justifyContent: 'flex-end' }}>
                             <div style={{ textAlign: 'right' }}>
                               <span style={{ fontSize: '0.85rem', color: '#888', display: 'block' }}>매매 평균가</span>
-                              <strong style={{ fontSize: '1.2rem', color: '#d32f2f' }}>{Number(priceInfo.resTopAveragePrice || 0).toLocaleString()} 만원</strong>
+                              {/* 🌟 10000 단위 대신 읽기 편한 한글 단위 출력 */}
+                              <strong style={{ fontSize: '1.2rem', color: '#d32f2f' }}>
+                                {formatKoreanPrice(priceInfo.resTopAveragePrice)}
+                              </strong>
                             </div>
                             <div style={{ textAlign: 'right' }}>
                               <span style={{ fontSize: '0.85rem', color: '#888', display: 'block' }}>전세 평균가</span>
-                              <strong style={{ fontSize: '1.2rem', color: '#1976d2' }}>{Number(priceInfo.resTopAveragePrice1 || 0).toLocaleString()} 만원</strong>
+                              <strong style={{ fontSize: '1.2rem', color: '#1976d2' }}>
+                                {formatKoreanPrice(priceInfo.resTopAveragePrice1)}
+                              </strong>
                             </div>
                           </div>
                         </div>

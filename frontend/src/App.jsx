@@ -6,13 +6,13 @@ import './App.css';
 
 const API_BASE_URL = "https://safehome-ai-pkkv.onrender.com"; 
 
-// 🌟 [추가된 기능] 숫자를 한국식 '억, 만' 단위로 예쁘게 바꿔주는 함수
+// 🌟 숫자를 한국식 '억, 만' 단위로 예쁘게 바꿔주는 함수
 const formatKoreanPrice = (priceStr) => {
   const num = Number(priceStr);
-  if (!num || num === 0) return "-"; // 0원이거나 데이터가 없으면 '-' 표시
+  if (!num || num === 0) return "-";
   
-  const eok = Math.floor(num / 10000); // 10000으로 나눈 몫은 '억'
-  const man = num % 10000;             // 나머지는 '만'
+  const eok = Math.floor(num / 10000);
+  const man = num % 10000;
   
   if (eok > 0) {
     return man > 0 ? `${eok}억 ${man.toLocaleString()}만원` : `${eok}억원`;
@@ -476,7 +476,6 @@ function App() {
 
                 {marketLoading && <div style={{ textAlign: 'center', padding: '30px', color: '#888' }}>단지 시세 정보를 대법원 캐시에서 불러오고 있습니다...</div>}
                 
-                {/* 🌟 예쁘게 변환된 단위가 적용되는 부분 */}
                 {marketResult && marketResult.data && (
                   <div className="fade-in" style={{ marginTop: '20px', borderTop: '2px solid var(--border)', paddingTop: '30px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '20px' }}>
@@ -501,7 +500,6 @@ function App() {
                           <div style={{ flex: 2, display: 'flex', gap: '20px', justifyContent: 'flex-end' }}>
                             <div style={{ textAlign: 'right' }}>
                               <span style={{ fontSize: '0.85rem', color: '#888', display: 'block' }}>매매 평균가</span>
-                              {/* 🌟 10000 단위 대신 읽기 편한 한글 단위 출력 */}
                               <strong style={{ fontSize: '1.2rem', color: '#d32f2f' }}>
                                 {formatKoreanPrice(priceInfo.resTopAveragePrice)}
                               </strong>

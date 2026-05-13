@@ -140,10 +140,9 @@ codef = CodefService()
 # ==========================================
 # 🌟 3. AI API 다중 키(로테이션) 자동화 로직
 # ==========================================
-# 쉼표(,)로 구분된 키들을 읽어와서 리스트로 만듭니다.
 api_keys_str = os.getenv("GEMINI_API_KEYS", "").strip().strip('"').strip("'")
 api_keys_list = [k.strip() for k in api_keys_str.split(",") if k.strip()]
-current_key_index = 0  # 현재 사용 중인 키의 순번
+current_key_index = 0  
 
 
 # ==========================================
@@ -221,6 +220,8 @@ async def analyze_contract(file: UploadFile = File(...)):
             
             except Exception as e:
                 error_msg = str(e).lower()
+                print(f"\n🚨 [디버깅] {current_key_index + 1}번째 키에서 에러 발생: {str(e)}\n")
+                
                 # 한도 초과 에러 감지 시 다음 키로 이동
                 if "429" in error_msg or "quota" in error_msg or "exhausted" in error_msg:
                     print(f"⚠️ {current_key_index + 1}번째 키 한도 초과! 다음 키로 교체합니다...")
@@ -257,6 +258,8 @@ async def chat_with_ai(request: ChatRequest):
             
             except Exception as e:
                 error_msg = str(e).lower()
+                print(f"\n🚨 [디버깅] {current_key_index + 1}번째 키에서 에러 발생: {str(e)}\n")
+                
                 if "429" in error_msg or "quota" in error_msg or "exhausted" in error_msg:
                     print(f"⚠️ {current_key_index + 1}번째 키 한도 초과! 다음 키로 교체합니다...")
                     current_key_index = (current_key_index + 1) % len(api_keys_list)

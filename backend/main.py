@@ -138,9 +138,9 @@ codef = CodefService()
 
 
 # ==========================================
-# 🌟 3. AI API 다중 키(로테이션) 설정
+# 🌟 3. AI API 다중 키(로테이션) 자동화 로직
 # ==========================================
-# 쉼표(,)로 구분된 키들을 리스트 형태로 변환하여 저장합니다.
+# 쉼표(,)로 구분된 키들을 읽어와서 리스트로 만듭니다.
 api_keys_str = os.getenv("GEMINI_API_KEYS", "").strip().strip('"').strip("'")
 api_keys_list = [k.strip() for k in api_keys_str.split(",") if k.strip()]
 current_key_index = 0  # 현재 사용 중인 키의 순번
@@ -201,7 +201,7 @@ async def fetch_estate_list(request: EstateListRequest):
 async def fetch_market_price(request: MarketPriceRequest):
     return codef.get_market_price(request.dict())
 
-# 🌟 계약서 분석 (자동 키 스위칭 로직 적용)
+# 🌟 계약서 분석 (자동 키 스위칭 로직)
 @app.post("/analyze")
 async def analyze_contract(file: UploadFile = File(...)):
     global current_key_index
@@ -215,14 +215,13 @@ async def analyze_contract(file: UploadFile = File(...)):
         attempts = 0
         while attempts < len(api_keys_list):
             try:
-                # 현재 순번의 키로 AI 클라이언트 생성
                 client = Client(api_key=api_keys_list[current_key_index])
                 response = client.models.generate_content(model="gemini-2.0-flash", contents=[prompt, image_part])
                 return {"analysis": response.text}
             
             except Exception as e:
                 error_msg = str(e).lower()
-                # 429 에러(한도 초과)가 발생하면 다음 키로 교체!
+                # 한도 초과 에러 감지 시 다음 키로 이동
                 if "429" in error_msg or "quota" in error_msg or "exhausted" in error_msg:
                     print(f"⚠️ {current_key_index + 1}번째 키 한도 초과! 다음 키로 교체합니다...")
                     current_key_index = (current_key_index + 1) % len(api_keys_list)
@@ -230,14 +229,13 @@ async def analyze_contract(file: UploadFile = File(...)):
                 else:
                     raise HTTPException(status_code=500, detail=str(e))
                     
-        # 모든 키를 다 돌았는데도 안 될 경우
         raise HTTPException(status_code=429, detail="등록된 모든 API 키의 일일 한도가 초과되었습니다.")
         
     except Exception as e:
         if isinstance(e, HTTPException): raise e
         raise HTTPException(status_code=500, detail=str(e))
 
-# 🌟 챗봇 대화 (자동 키 스위칭 로직 적용)
+# 🌟 챗봇 대화 (자동 키 스위칭 로직)
 @app.post("/chat")
 async def chat_with_ai(request: ChatRequest):
     global current_key_index

@@ -298,3 +298,9 @@ body { margin: 0; background: var(--bg-main); overflow-x: hidden; }
   text-align: left;
   font-weight: bold;
 }
+
+.hover-card:hover {
+  background: var(--card-bg) !important;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+  transform: translateY(-2px);
+}

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Sun, Moon, Send, FileSearch, Building2, ShieldCheck, MessageSquare, ArrowLeft, Upload, Search, MapPin, LogOut, Plus, Archive, TrendingUp } from 'lucide-react';
+import { Sun, Moon, Send, FileSearch, Building2, ShieldCheck, MessageSquare, ArrowLeft, Upload, Search, MapPin, LogOut, Plus, Archive, TrendingUp, Building } from 'lucide-react';
 import DaumPostcode from 'react-daum-postcode';
 import './App.css';
 
@@ -83,8 +83,12 @@ function App() {
   const [regRealtyType, setRegRealtyType] = useState("1");
   const [regHistory, setRegHistory] = useState([]); 
 
-  // 🌟 시세조회 State 추가
-  const [marketComplexNo, setMarketComplexNo] = useState("");
+  // 🌟 단지검색 & 시세조회 State 통합
+  const [searchSido, setSearchSido] = useState("");
+  const [searchSigun, setSearchSigun] = useState("");
+  const [searchDong, setSearchDong] = useState("");
+  const [estateList, setEstateList] = useState([]);
+  const [estateLoading, setEstateLoading] = useState(false);
   const [marketResult, setMarketResult] = useState(null);
   const [marketLoading, setMarketLoading] = useState(false);
 
@@ -167,10 +171,7 @@ function App() {
       const res = await fetch(`${API_BASE_URL}/fetch-real-estate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          user_id: userId, 
-          addr_sido: regSido, addr_sigungu: regSigungu, addr_roadName: regRoadName, addr_buildingNumber: regBldNum, dong: regDong, ho: regHo, realtyType: regRealtyType 
-        })
+        body: JSON.stringify({ user_id: userId, addr_sido: regSido, addr_sigungu: regSigungu, addr_roadName: regRoadName, addr_buildingNumber: regBldNum, dong: regDong, ho: regHo, realtyType: regRealtyType })
       });
       const data = await res.json();
       setRegResult(data);
@@ -204,23 +205,40 @@ function App() {
     downloadLink.click();
   };
 
-  // 🌟 시세조회 기능 추가
-  const handleFetchMarketPrice = async () => {
-    if (!marketComplexNo) return alert("단지 일련번호를 입력해주세요.");
-    setMarketLoading(true);
+  // 🌟 단지 목록 검색 핸들러
+  const handleSearchEstates = async () => {
+    if (!searchSido || !searchSigun || !searchDong) return alert("시/도, 시/군/구, 읍/면/동을 모두 입력해주세요.");
+    setEstateLoading(true); setEstateList([]); setMarketResult(null);
+    try {
+      const res = await fetch(`${API_BASE_URL}/fetch-estate-list`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ addr_sido: searchSido, addr_sigun: searchSigun, addr_dong: searchDong })
+      });
+      const data = await res.json();
+      if (data.data) {
+        // 단건 객체일 경우 배열로 강제 변환하여 화면에 렌더링하기 쉽게 만듭니다.
+        setEstateList(Array.isArray(data.data) ? data.data : [data.data]);
+      } else {
+        alert("해당 지역에 검색된 단지가 없습니다.");
+      }
+    } catch (err) { alert("단지 검색 실패!"); } finally { setEstateLoading(false); }
+  };
+
+  // 🌟 특정 단지 선택 시 시세 조회 핸들러
+  const handleFetchMarketPrice = async (complexNo) => {
+    setMarketLoading(true); setMarketResult(null);
     try {
       const res = await fetch(`${API_BASE_URL}/fetch-market-price`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ complex_no: marketComplexNo })
+        body: JSON.stringify({ complex_no: complexNo })
       });
       const data = await res.json();
       setMarketResult(data);
-    } catch (err) {
-      alert("시세 조회 실패!");
-    } finally {
-      setMarketLoading(false);
-    }
+      // 스크롤을 결과화면으로 부드럽게 내리기
+      setTimeout(() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }), 100);
+    } catch (err) { alert("시세 조회 실패!"); } finally { setMarketLoading(false); }
   };
 
   if (!isLoggedIn) return <Login onLoginSuccess={(id) => { setIsLoggedIn(true); setUserId(id); }} />;
@@ -244,7 +262,6 @@ function App() {
           <div onClick={() => setCurrentView('history')} style={{ padding: '12px 15px', borderRadius: '10px', cursor: 'pointer', background: currentView === 'history' ? 'var(--card-bg)' : 'transparent', display: 'flex', alignItems: 'center', gap: '12px', fontSize: '0.95rem' }}>
             <MessageSquare size={18} color="var(--accent)" /> AI 상담 기록
           </div>
-          {/* 🌟 시세조회 사이드바 메뉴 추가 */}
           <div onClick={() => setCurrentView('market')} style={{ padding: '12px 15px', borderRadius: '10px', cursor: 'pointer', background: currentView === 'market' ? 'var(--card-bg)' : 'transparent', display: 'flex', alignItems: 'center', gap: '12px', fontSize: '0.95rem' }}>
             <TrendingUp size={18} color="var(--accent)" /> 아파트 시세 조회
           </div>
@@ -275,7 +292,6 @@ function App() {
                 <h4>실시간 등기 발급</h4>
                 <p>대법원 데이터를 바탕으로 권리 관계를 확인합니다.</p>
               </div>
-              {/* 🌟 시세조회 홈 메뉴 추가 */}
               <div className="service-card" onClick={() => setCurrentView('market')}>
                 <div className="icon-wrapper" style={{ background: '#fbbc05' }}><TrendingUp size={40} color="white" /></div>
                 <h4>아파트 시세 조회</h4>
@@ -290,7 +306,6 @@ function App() {
           </div>
         )}
 
-        {/* 보관함 화면 */}
         {currentView === 'archive' && (
           <div className="fade-in" style={{ flex: 1, padding: '40px', overflowY: 'auto' }}>
             <button className="back-btn" onClick={() => setCurrentView('home')}><ArrowLeft size={20}/> 뒤로가기</button>
@@ -314,7 +329,6 @@ function App() {
           </div>
         )}
 
-        {/* 계약서 분석 화면 */}
         {currentView === 'contract' && (
           <div className="fade-in" style={{ flex: 1, padding: '40px', overflowY: 'auto' }}>
             <button className="back-btn" onClick={() => setCurrentView('home')}><ArrowLeft size={20}/> 뒤로가기</button>
@@ -332,7 +346,6 @@ function App() {
           </div>
         )}
 
-        {/* AI 상담 화면 */}
         {currentView === 'history' && (
           <div className="fade-in" style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', maxWidth: '1000px', margin: '0 auto', width: '100%' }}>
             <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: '40px 20px', display: 'flex', flexDirection: 'column', gap: '30px' }}>
@@ -372,7 +385,6 @@ function App() {
           </div>
         )}
 
-        {/* 등기 발급 화면 */}
         {currentView === 'register' && (
           <div className="fade-in" style={{ flex: 1, padding: '40px', overflowY: 'auto' }}>
             <button className="back-btn" onClick={() => setCurrentView('home')}><ArrowLeft size={20}/> 뒤로가기</button>
@@ -391,7 +403,6 @@ function App() {
                   <input placeholder="동 (예: 101동)" value={regDong} onChange={(e) => setRegDong(e.target.value)} style={{ flex: 1, padding: '15px', borderRadius: '10px', border: '1px solid var(--border)' }} />
                   <input placeholder="호 (예: 202호)" value={regHo} onChange={(e) => setRegHo(e.target.value)} style={{ flex: 1, padding: '15px', borderRadius: '10px', border: '1px solid var(--border)' }} />
                 </div>
-                
                 <button onClick={handleFetchRegister} disabled={regLoading} className="main-btn" style={{ width: '100%', background: regLoading ? '#888' : '#34a853', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px' }}>
                   <Building2 size={20} />
                   {regLoading ? "대법원 통신 및 발급 중..." : "등기부등본 원본 가져오기 (대법원 캐시 차감)"}
@@ -404,20 +415,13 @@ function App() {
                         <ShieldCheck size={40} color="#34a853" />
                       </div>
                       <h3 style={{ margin: '0 0 15px 0', color: '#34a853', fontSize: '1.5rem' }}>등기부등본 발급 성공!</h3>
-                      <p style={{ color: '#888', marginBottom: '30px', lineHeight: '1.6' }}>
-                        대법원 원본 데이터가 안전하게 수신되었습니다.<br/>
-                        아래 버튼을 눌러 PDF 파일을 열람하거나 다운로드하세요.
-                      </p>
-                      <button onClick={handleDownloadPDF} className="main-btn" style={{ margin: 0, padding: '15px 30px', fontSize: '1.1rem', background: '#34a853', width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px' }}>
-                        📄 PDF 열람 및 다운로드
-                      </button>
+                      <p style={{ color: '#888', marginBottom: '30px', lineHeight: '1.6' }}>대법원 원본 데이터가 안전하게 수신되었습니다.<br/>아래 버튼을 눌러 PDF 파일을 열람하거나 다운로드하세요.</p>
+                      <button onClick={handleDownloadPDF} className="main-btn" style={{ margin: 0, padding: '15px 30px', fontSize: '1.1rem', background: '#34a853', width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px' }}>📄 PDF 열람 및 다운로드</button>
                     </div>
                   ) : (
                     <div className="fade-in" style={{ background: 'var(--bg-main)', border: '1px solid #f44336', padding: '20px', marginTop: '30px', borderRadius: '10px', textAlign: 'center' }}>
                       <h4 style={{ margin: '0 0 10px 0', color: '#f44336' }}>발급 오류 발생</h4>
-                      <p style={{ color: 'var(--text)', fontSize: '0.9rem', marginBottom: 0 }}>
-                        {regResult.result?.message || regResult.error || "알 수 없는 오류가 발생했습니다."}
-                      </p>
+                      <p style={{ color: 'var(--text)', fontSize: '0.9rem', marginBottom: 0 }}>{regResult.result?.message || regResult.error || "알 수 없는 오류가 발생했습니다."}</p>
                     </div>
                   )
                 )}
@@ -426,47 +430,74 @@ function App() {
           </div>
         )}
 
-        {/* 🌟 시세조회 화면 추가됨 */}
+        {/* 🌟 1단계: 단지 검색 -> 2단계: 시세 표시로 업그레이드된 화면 */}
         {currentView === 'market' && (
           <div className="fade-in" style={{ flex: 1, padding: '40px', overflowY: 'auto' }}>
             <button className="back-btn" onClick={() => setCurrentView('home')}><ArrowLeft size={20}/> 뒤로가기</button>
             <div style={{ maxWidth: '800px', margin: '0 auto', marginTop: '20px' }}>
               <section className="card" style={{ padding: '40px' }}>
                 <h3 className="card-title" style={{ color: 'var(--accent)', marginBottom: '30px' }}><TrendingUp /> 아파트 시세 조회</h3>
-                <div style={{ display: 'flex', gap: '15px', marginBottom: '20px' }}>
-                  {/* 단지 일련번호는 현재 직접 입력해야 합니다 (추후 단지검색 API 연동 가능) */}
-                  <input 
-                    placeholder="단지 일련번호 (예: 1171010900120277764)" 
-                    value={marketComplexNo} 
-                    onChange={(e) => setMarketComplexNo(e.target.value)} 
-                    style={{ flex: 1, padding: '15px', borderRadius: '10px', border: '1px solid var(--border)' }} 
-                  />
-                  <button onClick={handleFetchMarketPrice} disabled={marketLoading} className="main-btn" style={{ width: '150px' }}>
-                    {marketLoading ? "조회 중..." : "시세 확인"}
-                  </button>
-                </div>
                 
-                {/* 시세 조회 결과 출력 */}
+                {/* 🌟 주소 입력창 추가 */}
+                <div style={{ display: 'flex', gap: '10px', marginBottom: '15px' }}>
+                  <input placeholder="시/도 (예: 서울특별시)" value={searchSido} onChange={(e) => setSearchSido(e.target.value)} style={{ flex: 1, padding: '15px', borderRadius: '10px', border: '1px solid var(--border)' }} />
+                  <input placeholder="시/군/구 (예: 송파구)" value={searchSigun} onChange={(e) => setSearchSigun(e.target.value)} style={{ flex: 1, padding: '15px', borderRadius: '10px', border: '1px solid var(--border)' }} />
+                  <input placeholder="읍/면/동 (예: 장지동)" value={searchDong} onChange={(e) => setSearchDong(e.target.value)} style={{ flex: 1, padding: '15px', borderRadius: '10px', border: '1px solid var(--border)' }} />
+                </div>
+                <button onClick={handleSearchEstates} disabled={estateLoading} className="main-btn" style={{ width: '100%', marginBottom: '30px' }}>
+                  {estateLoading ? "단지 목록을 찾는 중..." : "해당 지역 단지 검색하기"}
+                </button>
+                
+                {/* 🌟 단지 검색 결과 리스트 */}
+                {estateList.length > 0 && !marketResult && (
+                  <div className="fade-in">
+                    <h4 style={{ marginBottom: '15px', color: 'var(--text)' }}>검색된 단지 목록 ({estateList.length}건)</h4>
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                      {estateList.map((estate, idx) => (
+                        <div key={idx} onClick={() => handleFetchMarketPrice(estate.commComplexNo)} style={{ background: 'var(--bg-main)', padding: '20px', borderRadius: '10px', border: '1px solid var(--border)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'space-between', transition: 'all 0.2s' }} className="hover-card">
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                            <Building color="var(--accent)" />
+                            <span style={{ fontSize: '1.1rem', fontWeight: '500' }}>{estate.resComplexName}</span>
+                          </div>
+                          <span style={{ fontSize: '0.9rem', color: '#888', background: 'var(--card-bg)', padding: '5px 10px', borderRadius: '20px' }}>시세 확인 ➔</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {marketLoading && <div style={{ textAlign: 'center', padding: '30px', color: '#888' }}>단지 시세 정보를 대법원 캐시에서 불러오고 있습니다...</div>}
+                
+                {/* 🌟 시세 상세 결과 화면 */}
                 {marketResult && marketResult.data && (
-                  <div className="fade-in" style={{ marginTop: '30px' }}>
-                    <h4 style={{ fontSize: '1.3rem', color: 'var(--text)', marginBottom: '5px' }}>{marketResult.data.resComplexName}</h4>
-                    <p style={{ color: '#888', fontSize: '0.9rem', marginBottom: '20px' }}>기준일: {marketResult.data.resFixedDate}</p>
+                  <div className="fade-in" style={{ marginTop: '20px', borderTop: '2px solid var(--border)', paddingTop: '30px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', marginBottom: '20px' }}>
+                      <div>
+                        <span style={{ background: 'var(--accent)', color: '#fff', padding: '5px 10px', borderRadius: '5px', fontSize: '0.8rem', fontWeight: 'bold', marginBottom: '10px', display: 'inline-block' }}>{marketResult.data.resType || "아파트"}</span>
+                        <h4 style={{ fontSize: '1.5rem', color: 'var(--text)', margin: '0 0 5px 0' }}>{marketResult.data.resComplexName}</h4>
+                        <p style={{ color: '#888', fontSize: '0.9rem', margin: 0 }}>{marketResult.data.commAddrRoadName}</p>
+                      </div>
+                      <div style={{ textAlign: 'right' }}>
+                        <p style={{ color: '#888', fontSize: '0.85rem', margin: '0 0 5px 0' }}>기준일: {marketResult.data.resFixedDate}</p>
+                        <button onClick={() => setMarketResult(null)} style={{ background: 'none', border: '1px solid var(--border)', padding: '5px 15px', borderRadius: '5px', cursor: 'pointer', color: 'var(--text)' }}>다른 단지 검색</button>
+                      </div>
+                    </div>
                     
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                       {marketResult.data.resAreaPriceList && marketResult.data.resAreaPriceList.map((priceInfo, idx) => (
                         <div key={idx} style={{ background: 'var(--bg-main)', border: '1px solid var(--border)', borderRadius: '10px', padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--accent)', marginBottom: '5px' }}>{priceInfo.resArea} ㎡</div>
+                            <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--text)', marginBottom: '5px' }}>{priceInfo.resArea} ㎡</div>
                             <div style={{ fontSize: '0.9rem', color: '#888' }}>세대수: {priceInfo.resCompositionCnt}세대</div>
                           </div>
                           <div style={{ flex: 2, display: 'flex', gap: '20px', justifyContent: 'flex-end' }}>
                             <div style={{ textAlign: 'right' }}>
                               <span style={{ fontSize: '0.85rem', color: '#888', display: 'block' }}>매매 평균가</span>
-                              <strong style={{ fontSize: '1.1rem', color: '#d32f2f' }}>{Number(priceInfo.resTopAveragePrice || 0).toLocaleString()} 만원</strong>
+                              <strong style={{ fontSize: '1.2rem', color: '#d32f2f' }}>{Number(priceInfo.resTopAveragePrice || 0).toLocaleString()} 만원</strong>
                             </div>
                             <div style={{ textAlign: 'right' }}>
                               <span style={{ fontSize: '0.85rem', color: '#888', display: 'block' }}>전세 평균가</span>
-                              <strong style={{ fontSize: '1.1rem', color: '#1976d2' }}>{Number(priceInfo.resTopAveragePrice1 || 0).toLocaleString()} 만원</strong>
+                              <strong style={{ fontSize: '1.2rem', color: '#1976d2' }}>{Number(priceInfo.resTopAveragePrice1 || 0).toLocaleString()} 만원</strong>
                             </div>
                           </div>
                         </div>
@@ -475,13 +506,12 @@ function App() {
                   </div>
                 )}
                 {marketResult && !marketResult.data && (
-                  <div style={{ color: '#f44336', marginTop: '20px' }}>조회 결과가 없거나 오류가 발생했습니다. 일련번호를 확인해주세요.</div>
+                  <div style={{ color: '#f44336', marginTop: '20px' }}>조회 결과가 없거나 API 오류가 발생했습니다.</div>
                 )}
               </section>
             </div>
           </div>
         )}
-
       </main>
 
       {isPostcodeOpen && (

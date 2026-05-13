@@ -17,7 +17,7 @@ from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 
-# 🌟 환경 변수 강제 새로고침 옵션
+# 🌟 환경 변수 강제 새로고침
 load_dotenv(override=True)
 
 # ==========================================
@@ -27,7 +27,6 @@ SQLALCHEMY_DATABASE_URL = os.getenv("DATABASE_URL")
 if SQLALCHEMY_DATABASE_URL and SQLALCHEMY_DATABASE_URL.startswith("postgres://"):
     SQLALCHEMY_DATABASE_URL = SQLALCHEMY_DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
-# 안정적인 DB 연결 유지를 위해 pool_pre_ping 추가
 engine = create_engine(SQLALCHEMY_DATABASE_URL, pool_pre_ping=True)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
@@ -91,6 +90,7 @@ class CodefService:
             return response.json().get("access_token")
         except: return None
 
+    # [기능 1] 대법원 등기부등본 열람
     def get_real_estate_register(self, params: dict):
         token = self.get_access_token()
         if not token: return {"error": "CODEF 토큰 발급 실패"}
@@ -103,87 +103,77 @@ class CodefService:
         raw_e_prepay_pass = os.getenv("E_PREPAY_PASS", "smsh1602").strip().strip('"').strip("'")
         encrypted_e_prepay_pass = self.encrypt_rsa(raw_e_prepay_pass)
         
-        if not e_prepay_no:
-            return {"error": "캐시 번호가 누락되었습니다."}
+        if not e_prepay_no: return {"error": "캐시 번호가 누락되었습니다."}
         
         url = f"{self.base_url}/kr/public/ck/real-estate-register/status" 
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-        
         payload = {
-            "organization": "0002",
-            "phoneNo": real_phone, 
-            "password": encrypted_password, 
-            "inquiryType": params.get("inquiryType", "3"),
-            "realtyType": params.get("realtyType", "1"),
-            "jointMortgageJeonseYN": "1",
-            "tradingYN": "1",
-            "issueType": "0",         
-            "originDataYN": "1",      
-            "registerSummaryYN": "1",
-            "ePrepayNo": e_prepay_no,
-            "ePrepayPass": encrypted_e_prepay_pass, 
-            **params
+            "organization": "0002", "phoneNo": real_phone, "password": encrypted_password, 
+            "inquiryType": params.get("inquiryType", "3"), "realtyType": params.get("realtyType", "1"),
+            "jointMortgageJeonseYN": "1", "tradingYN": "1", "issueType": "0", "originDataYN": "1",      
+            "registerSummaryYN": "1", "ePrepayNo": e_prepay_no, "ePrepayPass": encrypted_e_prepay_pass, **params
         }
-        
         try:
             response = requests.post(url, headers=headers, json=payload)
             return json.loads(urllib.parse.unquote(response.text))
-        except Exception as e:
-            return {"error": str(e)}
+        except Exception as e: return {"error": str(e)}
 
-    # 🌟 [새로 추가됨] 시세정보 조회 기능
+    # 🌟 [새 기능] 단지 목록 조회
+    def get_estate_list(self, params: dict):
+        token = self.get_access_token()
+        if not token: return {"error": "CODEF 토큰 발급 실패"}
+        
+        url = f"{self.base_url}/kr/public/lt/real-estate-board/estate-list"
+        headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+        payload = {
+            "organization": "0011",
+            "addrSido": params.get("addr_sido", ""),
+            "addrSigun": params.get("addr_sigun", ""),
+            "addrDong": params.get("addr_dong", "")
+        }
+        try:
+            response = requests.post(url, headers=headers, json=payload)
+            return json.loads(urllib.parse.unquote(response.text))
+        except Exception as e: return {"error": str(e)}
+
+    # [기능 2] 시세정보 조회
     def get_market_price(self, params: dict):
         token = self.get_access_token()
         if not token: return {"error": "CODEF 토큰 발급 실패"}
         
         url = f"{self.base_url}/kr/public/lt/real-estate-board/market-price-information"
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-        
-        # API 문서에 명시된 필수 입력값 세팅
         payload = {
             "organization": "0011",
             "searchGbn": params.get("search_gbn", "1"),
             "complexNo": params.get("complex_no")
         }
-        
         try:
             response = requests.post(url, headers=headers, json=payload)
             return json.loads(urllib.parse.unquote(response.text))
-        except Exception as e:
-            return {"error": str(e)}
+        except Exception as e: return {"error": str(e)}
 
 codef = CodefService()
 
 # ==========================================
 # 🌟 3. 데이터 모델 및 API
 # ==========================================
-class UserRegister(BaseModel):
-    user_id: str
-    password: str
-    username: str = None
-
-class LoginRequest(BaseModel):
-    user_id: str
-    password: str
-
+class UserRegister(BaseModel): user_id: str; password: str; username: str = None
+class LoginRequest(BaseModel): user_id: str; password: str
 class RealEstateRequest(BaseModel):
-    user_id: str 
-    addr_sido: str
-    addr_sigungu: str
-    addr_roadName: str = ""
-    addr_buildingNumber: str = ""
-    dong: str = ""
-    ho: str = ""
-    realtyType: str = "1" 
+    user_id: str; addr_sido: str; addr_sigungu: str; addr_roadName: str = ""; addr_buildingNumber: str = ""; dong: str = ""; ho: str = ""; realtyType: str = "1" 
 
-# 🌟 [새로 추가됨] 시세정보 요청 모델
+# 🌟 새로 추가된 Pydantic 모델
+class EstateListRequest(BaseModel):
+    addr_sido: str
+    addr_sigun: str
+    addr_dong: str
+
 class MarketPriceRequest(BaseModel):
     complex_no: str
     search_gbn: str = "1"
 
-class ChatRequest(BaseModel):
-    user_message: str
-    analysis_context: str
+class ChatRequest(BaseModel): user_message: str; analysis_context: str
 
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -192,8 +182,7 @@ api_key = os.getenv("GEMINI_API_KEY", "").strip().strip('"').strip("'")
 gemini_client = Client(api_key=api_key) if api_key else None
 
 @app.get("/ping")
-async def ping():
-    return {"message": "pong"}
+async def ping(): return {"message": "pong"}
 
 @app.post("/register")
 async def register(user_data: UserRegister, db: Session = Depends(get_db)):
@@ -212,35 +201,28 @@ async def login(req: LoginRequest, db: Session = Depends(get_db)):
 async def fetch_info(request: RealEstateRequest, db: Session = Depends(get_db)):
     codef_params = request.dict()
     user_id = codef_params.pop("user_id", None)
-    
     res = codef.get_real_estate_register(codef_params)
-    
     if res.get("data"):
         data_obj = res["data"][0] if isinstance(res["data"], list) else res["data"]
         pdf_data = data_obj.get("resOriGinalData") or data_obj.get("resoriGinalData")
-        
         if pdf_data:
             full_addr = f"{request.addr_sido} {request.addr_roadName} {request.addr_buildingNumber} {request.dong} {request.ho}".strip()
-            new_history = RealEstateHistoryTable(
-                owner_id=user_id,
-                address=full_addr,
-                pdf_base64=pdf_data
-            )
-            db.add(new_history)
-            db.commit()
-            
-    return res
-
-# 🌟 [새로 추가됨] 시세정보 조회 엔드포인트
-@app.post("/fetch-market-price")
-async def fetch_market_price(request: MarketPriceRequest):
-    res = codef.get_market_price(request.dict())
+            new_history = RealEstateHistoryTable(owner_id=user_id, address=full_addr, pdf_base64=pdf_data)
+            db.add(new_history); db.commit()
     return res
 
 @app.get("/real-estate-history/{user_id}")
 async def get_history(user_id: str, db: Session = Depends(get_db)):
-    histories = db.query(RealEstateHistoryTable).filter(RealEstateHistoryTable.owner_id == user_id).order_by(RealEstateHistoryTable.created_at.desc()).all()
-    return histories
+    return db.query(RealEstateHistoryTable).filter(RealEstateHistoryTable.owner_id == user_id).order_by(RealEstateHistoryTable.created_at.desc()).all()
+
+# 🌟 [새로 추가됨] 단지 목록 조회 엔드포인트
+@app.post("/fetch-estate-list")
+async def fetch_estate_list(request: EstateListRequest):
+    return codef.get_estate_list(request.dict())
+
+@app.post("/fetch-market-price")
+async def fetch_market_price(request: MarketPriceRequest):
+    return codef.get_market_price(request.dict())
 
 @app.post("/analyze")
 async def analyze_contract(file: UploadFile = File(...)):
@@ -259,8 +241,7 @@ async def chat_with_ai(request: ChatRequest):
     try:
         sys_instruct = f"당신은 SafeHome AI 임대차 분쟁 전문가입니다. 다음 분석 결과를 바탕으로 상담하세요: {request.analysis_context}"
         response = gemini_client.models.generate_content(
-            model="gemini-2.0-flash", 
-            contents=request.user_message,
+            model="gemini-2.0-flash", contents=request.user_message,
             config=types.GenerateContentConfig(system_instruction=sys_instruct, max_output_tokens=2048, temperature=0.7)
         )
         return {"reply": response.text}

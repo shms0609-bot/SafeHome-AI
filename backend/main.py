@@ -100,17 +100,9 @@ class CodefService:
         encrypted_password = self.encrypt_rsa(raw_password)
         
         e_prepay_no = os.getenv("E_PREPAY_NO", "H82003788709").replace("-", "").strip().strip('"').strip("'")
-        
-        # 🌟 [핵심 수정] 새 비밀번호(smsh1602) 적용 및 RSA 암호화 필수 진행!
         raw_e_prepay_pass = os.getenv("E_PREPAY_PASS", "smsh1602").strip().strip('"').strip("'")
         encrypted_e_prepay_pass = self.encrypt_rsa(raw_e_prepay_pass)
         
-        print(f"\n--- 🕵️ 결제 정보 체크 ---")
-        print(f"전송할 캐시 번호 길이: {len(e_prepay_no)} (12자리 필수)")
-        print(f"전송할 캐시 비번 길이: {len(raw_e_prepay_pass)}")
-        print(f"비밀번호 RSA 암호화 완료 여부: {bool(encrypted_e_prepay_pass)}")
-        print(f"---------------------------\n")
-
         if not e_prepay_no:
             return {"error": "캐시 번호가 누락되었습니다."}
         
@@ -129,8 +121,29 @@ class CodefService:
             "originDataYN": "1",      
             "registerSummaryYN": "1",
             "ePrepayNo": e_prepay_no,
-            "ePrepayPass": encrypted_e_prepay_pass,  # 🌟 암호화된 비밀번호가 전송됩니다.
+            "ePrepayPass": encrypted_e_prepay_pass, 
             **params
+        }
+        
+        try:
+            response = requests.post(url, headers=headers, json=payload)
+            return json.loads(urllib.parse.unquote(response.text))
+        except Exception as e:
+            return {"error": str(e)}
+
+    # 🌟 [새로 추가됨] 시세정보 조회 기능
+    def get_market_price(self, params: dict):
+        token = self.get_access_token()
+        if not token: return {"error": "CODEF 토큰 발급 실패"}
+        
+        url = f"{self.base_url}/kr/public/lt/real-estate-board/market-price-information"
+        headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+        
+        # API 문서에 명시된 필수 입력값 세팅
+        payload = {
+            "organization": "0011",
+            "searchGbn": params.get("search_gbn", "1"),
+            "complexNo": params.get("complex_no")
         }
         
         try:
@@ -163,6 +176,11 @@ class RealEstateRequest(BaseModel):
     ho: str = ""
     realtyType: str = "1" 
 
+# 🌟 [새로 추가됨] 시세정보 요청 모델
+class MarketPriceRequest(BaseModel):
+    complex_no: str
+    search_gbn: str = "1"
+
 class ChatRequest(BaseModel):
     user_message: str
     analysis_context: str
@@ -173,7 +191,6 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 api_key = os.getenv("GEMINI_API_KEY", "").strip().strip('"').strip("'")
 gemini_client = Client(api_key=api_key) if api_key else None
 
-# Render 서버 헬스 체크용 Ping
 @app.get("/ping")
 async def ping():
     return {"message": "pong"}
@@ -212,6 +229,12 @@ async def fetch_info(request: RealEstateRequest, db: Session = Depends(get_db)):
             db.add(new_history)
             db.commit()
             
+    return res
+
+# 🌟 [새로 추가됨] 시세정보 조회 엔드포인트
+@app.post("/fetch-market-price")
+async def fetch_market_price(request: MarketPriceRequest):
+    res = codef.get_market_price(request.dict())
     return res
 
 @app.get("/real-estate-history/{user_id}")

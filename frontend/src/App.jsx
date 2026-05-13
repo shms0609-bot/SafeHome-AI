@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Sun, Moon, Send, FileSearch, Building2, ShieldCheck, MessageSquare, ArrowLeft, Upload, Search, MapPin, LogOut, Plus, Archive } from 'lucide-react';
+import { Sun, Moon, Send, FileSearch, Building2, ShieldCheck, MessageSquare, ArrowLeft, Upload, Search, MapPin, LogOut, Plus, Archive, TrendingUp } from 'lucide-react';
 import DaumPostcode from 'react-daum-postcode';
 import './App.css';
 
-// 🌟 승현님의 실제 Render 백엔드 주소 적용 완료!
 const API_BASE_URL = "https://safehome-ai-pkkv.onrender.com"; 
 
 function Login({ onLoginSuccess }) {
@@ -70,6 +69,7 @@ function App() {
   const [chatInput, setChatInput] = useState("");
   const [messages, setMessages] = useState([]);
 
+  // 등기 발급 State
   const [isPostcodeOpen, setIsPostcodeOpen] = useState(false);
   const [selectedAddress, setSelectedAddress] = useState(""); 
   const [regResult, setRegResult] = useState(null);
@@ -81,8 +81,12 @@ function App() {
   const [regDong, setRegDong] = useState("");
   const [regHo, setRegHo] = useState("");
   const [regRealtyType, setRegRealtyType] = useState("1");
-
   const [regHistory, setRegHistory] = useState([]); 
+
+  // 🌟 시세조회 State 추가
+  const [marketComplexNo, setMarketComplexNo] = useState("");
+  const [marketResult, setMarketResult] = useState(null);
+  const [marketLoading, setMarketLoading] = useState(false);
 
   const scrollRef = useRef(null);
 
@@ -200,6 +204,25 @@ function App() {
     downloadLink.click();
   };
 
+  // 🌟 시세조회 기능 추가
+  const handleFetchMarketPrice = async () => {
+    if (!marketComplexNo) return alert("단지 일련번호를 입력해주세요.");
+    setMarketLoading(true);
+    try {
+      const res = await fetch(`${API_BASE_URL}/fetch-market-price`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ complex_no: marketComplexNo })
+      });
+      const data = await res.json();
+      setMarketResult(data);
+    } catch (err) {
+      alert("시세 조회 실패!");
+    } finally {
+      setMarketLoading(false);
+    }
+  };
+
   if (!isLoggedIn) return <Login onLoginSuccess={(id) => { setIsLoggedIn(true); setUserId(id); }} />;
 
   return (
@@ -220,6 +243,10 @@ function App() {
           </div>
           <div onClick={() => setCurrentView('history')} style={{ padding: '12px 15px', borderRadius: '10px', cursor: 'pointer', background: currentView === 'history' ? 'var(--card-bg)' : 'transparent', display: 'flex', alignItems: 'center', gap: '12px', fontSize: '0.95rem' }}>
             <MessageSquare size={18} color="var(--accent)" /> AI 상담 기록
+          </div>
+          {/* 🌟 시세조회 사이드바 메뉴 추가 */}
+          <div onClick={() => setCurrentView('market')} style={{ padding: '12px 15px', borderRadius: '10px', cursor: 'pointer', background: currentView === 'market' ? 'var(--card-bg)' : 'transparent', display: 'flex', alignItems: 'center', gap: '12px', fontSize: '0.95rem' }}>
+            <TrendingUp size={18} color="var(--accent)" /> 아파트 시세 조회
           </div>
         </div>
         <div style={{ borderTop: '1px solid var(--border)', paddingTop: '15px', display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -248,6 +275,12 @@ function App() {
                 <h4>실시간 등기 발급</h4>
                 <p>대법원 데이터를 바탕으로 권리 관계를 확인합니다.</p>
               </div>
+              {/* 🌟 시세조회 홈 메뉴 추가 */}
+              <div className="service-card" onClick={() => setCurrentView('market')}>
+                <div className="icon-wrapper" style={{ background: '#fbbc05' }}><TrendingUp size={40} color="white" /></div>
+                <h4>아파트 시세 조회</h4>
+                <p>최신 면적별 실거래가와 전세가를 한눈에 확인하세요.</p>
+              </div>
               <div className="service-card" onClick={() => setCurrentView('archive')}>
                 <div className="icon-wrapper yellow"><Archive size={40} color="white" /></div>
                 <h4>등기부 보관함</h4>
@@ -257,7 +290,7 @@ function App() {
           </div>
         )}
 
-        {/* 🌟 보관함 화면 */}
+        {/* 보관함 화면 */}
         {currentView === 'archive' && (
           <div className="fade-in" style={{ flex: 1, padding: '40px', overflowY: 'auto' }}>
             <button className="back-btn" onClick={() => setCurrentView('home')}><ArrowLeft size={20}/> 뒤로가기</button>
@@ -364,7 +397,6 @@ function App() {
                   {regLoading ? "대법원 통신 및 발급 중..." : "등기부등본 원본 가져오기 (대법원 캐시 차감)"}
                 </button>
                 
-                {/* 🌟 수정된 성공/실패 화면 렌더링 UI */}
                 {regResult && (
                   (regResult.result && regResult.result.code === "CF-00000") || regResult.data ? (
                     <div className="fade-in" style={{ background: 'var(--card-bg)', border: '2px solid #34a853', padding: '40px 30px', marginTop: '30px', borderRadius: '15px', textAlign: 'center', boxShadow: '0 4px 15px rgba(52, 168, 83, 0.1)' }}>
@@ -389,11 +421,67 @@ function App() {
                     </div>
                   )
                 )}
-
               </section>
             </div>
           </div>
         )}
+
+        {/* 🌟 시세조회 화면 추가됨 */}
+        {currentView === 'market' && (
+          <div className="fade-in" style={{ flex: 1, padding: '40px', overflowY: 'auto' }}>
+            <button className="back-btn" onClick={() => setCurrentView('home')}><ArrowLeft size={20}/> 뒤로가기</button>
+            <div style={{ maxWidth: '800px', margin: '0 auto', marginTop: '20px' }}>
+              <section className="card" style={{ padding: '40px' }}>
+                <h3 className="card-title" style={{ color: 'var(--accent)', marginBottom: '30px' }}><TrendingUp /> 아파트 시세 조회</h3>
+                <div style={{ display: 'flex', gap: '15px', marginBottom: '20px' }}>
+                  {/* 단지 일련번호는 현재 직접 입력해야 합니다 (추후 단지검색 API 연동 가능) */}
+                  <input 
+                    placeholder="단지 일련번호 (예: 1171010900120277764)" 
+                    value={marketComplexNo} 
+                    onChange={(e) => setMarketComplexNo(e.target.value)} 
+                    style={{ flex: 1, padding: '15px', borderRadius: '10px', border: '1px solid var(--border)' }} 
+                  />
+                  <button onClick={handleFetchMarketPrice} disabled={marketLoading} className="main-btn" style={{ width: '150px' }}>
+                    {marketLoading ? "조회 중..." : "시세 확인"}
+                  </button>
+                </div>
+                
+                {/* 시세 조회 결과 출력 */}
+                {marketResult && marketResult.data && (
+                  <div className="fade-in" style={{ marginTop: '30px' }}>
+                    <h4 style={{ fontSize: '1.3rem', color: 'var(--text)', marginBottom: '5px' }}>{marketResult.data.resComplexName}</h4>
+                    <p style={{ color: '#888', fontSize: '0.9rem', marginBottom: '20px' }}>기준일: {marketResult.data.resFixedDate}</p>
+                    
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                      {marketResult.data.resAreaPriceList && marketResult.data.resAreaPriceList.map((priceInfo, idx) => (
+                        <div key={idx} style={{ background: 'var(--bg-main)', border: '1px solid var(--border)', borderRadius: '10px', padding: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--accent)', marginBottom: '5px' }}>{priceInfo.resArea} ㎡</div>
+                            <div style={{ fontSize: '0.9rem', color: '#888' }}>세대수: {priceInfo.resCompositionCnt}세대</div>
+                          </div>
+                          <div style={{ flex: 2, display: 'flex', gap: '20px', justifyContent: 'flex-end' }}>
+                            <div style={{ textAlign: 'right' }}>
+                              <span style={{ fontSize: '0.85rem', color: '#888', display: 'block' }}>매매 평균가</span>
+                              <strong style={{ fontSize: '1.1rem', color: '#d32f2f' }}>{Number(priceInfo.resTopAveragePrice || 0).toLocaleString()} 만원</strong>
+                            </div>
+                            <div style={{ textAlign: 'right' }}>
+                              <span style={{ fontSize: '0.85rem', color: '#888', display: 'block' }}>전세 평균가</span>
+                              <strong style={{ fontSize: '1.1rem', color: '#1976d2' }}>{Number(priceInfo.resTopAveragePrice1 || 0).toLocaleString()} 만원</strong>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {marketResult && !marketResult.data && (
+                  <div style={{ color: '#f44336', marginTop: '20px' }}>조회 결과가 없거나 오류가 발생했습니다. 일련번호를 확인해주세요.</div>
+                )}
+              </section>
+            </div>
+          </div>
+        )}
+
       </main>
 
       {isPostcodeOpen && (

@@ -364,17 +364,32 @@ function App() {
                   {regLoading ? "대법원 통신 및 발급 중..." : "등기부등본 원본 가져오기 (대법원 캐시 차감)"}
                 </button>
                 
+                {/* 🌟 수정된 성공/실패 화면 렌더링 UI */}
                 {regResult && (
-                  <div style={{ background: 'var(--bg-main)', border: '1px solid var(--border)', padding: '20px', marginTop: '30px', borderRadius: '10px' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-                      <h4 style={{ margin: 0, color: 'var(--text)' }}>조회 완료</h4>
-                      <button onClick={handleDownloadPDF} className="main-btn" style={{ margin: 0, padding: '10px 20px', fontSize: '0.95rem' }}>📄 PDF 다운로드</button>
+                  (regResult.result && regResult.result.code === "CF-00000") || regResult.data ? (
+                    <div className="fade-in" style={{ background: 'var(--card-bg)', border: '2px solid #34a853', padding: '40px 30px', marginTop: '30px', borderRadius: '15px', textAlign: 'center', boxShadow: '0 4px 15px rgba(52, 168, 83, 0.1)' }}>
+                      <div style={{ width: '70px', height: '70px', background: '#e6f4ea', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+                        <ShieldCheck size={40} color="#34a853" />
+                      </div>
+                      <h3 style={{ margin: '0 0 15px 0', color: '#34a853', fontSize: '1.5rem' }}>등기부등본 발급 성공!</h3>
+                      <p style={{ color: '#888', marginBottom: '30px', lineHeight: '1.6' }}>
+                        대법원 원본 데이터가 안전하게 수신되었습니다.<br/>
+                        아래 버튼을 눌러 PDF 파일을 열람하거나 다운로드하세요.
+                      </p>
+                      <button onClick={handleDownloadPDF} className="main-btn" style={{ margin: 0, padding: '15px 30px', fontSize: '1.1rem', background: '#34a853', width: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '10px' }}>
+                        📄 PDF 열람 및 다운로드
+                      </button>
                     </div>
-                    <pre style={{ background: '#1e1e1e', color: '#d4d4d4', padding: '20px', borderRadius: '10px', overflowX: 'auto', maxHeight: '300px' }}>
-                      {JSON.stringify(regResult, null, 2)}
-                    </pre>
-                  </div>
+                  ) : (
+                    <div className="fade-in" style={{ background: 'var(--bg-main)', border: '1px solid #f44336', padding: '20px', marginTop: '30px', borderRadius: '10px', textAlign: 'center' }}>
+                      <h4 style={{ margin: '0 0 10px 0', color: '#f44336' }}>발급 오류 발생</h4>
+                      <p style={{ color: 'var(--text)', fontSize: '0.9rem', marginBottom: 0 }}>
+                        {regResult.result?.message || regResult.error || "알 수 없는 오류가 발생했습니다."}
+                      </p>
+                    </div>
+                  )
                 )}
+
               </section>
             </div>
           </div>

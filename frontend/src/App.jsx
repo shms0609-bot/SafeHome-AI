@@ -4,7 +4,7 @@ import { Sun, Moon, Send, FileSearch, Building2, ShieldCheck, MessageSquare, Arr
 import DaumPostcode from 'react-daum-postcode';
 import './App.css';
 
-const API_BASE_URL = "https://safehome-ai-pkkv.onrender.com"; 
+const API_BASE_URL = "https://safehome-ai-1.onrender.com"; 
 
 // 🌟 숫자를 한국식 '억, 만' 단위로 예쁘게 바꿔주는 함수
 const formatKoreanPrice = (priceStr) => {

@@ -17,7 +17,6 @@ from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 
-# 🌟 환경 변수 강제 새로고침
 load_dotenv(override=True)
 
 # ==========================================
@@ -60,7 +59,7 @@ def get_db():
         db.close()
 
 # ==========================================
-# 🌟 2. CODEF API 서비스
+# 🌟 2. CODEF API 서비스 (등기부 & 시세)
 # ==========================================
 class CodefService:
     def __init__(self):
@@ -90,21 +89,16 @@ class CodefService:
             return response.json().get("access_token")
         except: return None
 
-    # [기능 1] 대법원 등기부등본 열람
     def get_real_estate_register(self, params: dict):
         token = self.get_access_token()
         if not token: return {"error": "CODEF 토큰 발급 실패"}
-        
         real_phone = os.getenv("REAL_ESTATE_PHONE", "01000000000").strip().strip('"').strip("'")
         raw_password = os.getenv("REAL_ESTATE_PASSWORD", "1234").strip().strip('"').strip("'")
         encrypted_password = self.encrypt_rsa(raw_password)
-        
         e_prepay_no = os.getenv("E_PREPAY_NO", "H82003788709").replace("-", "").strip().strip('"').strip("'")
         raw_e_prepay_pass = os.getenv("E_PREPAY_PASS", "smsh1602").strip().strip('"').strip("'")
         encrypted_e_prepay_pass = self.encrypt_rsa(raw_e_prepay_pass)
-        
         if not e_prepay_no: return {"error": "캐시 번호가 누락되었습니다."}
-        
         url = f"{self.base_url}/kr/public/ck/real-estate-register/status" 
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
         payload = {
@@ -118,36 +112,23 @@ class CodefService:
             return json.loads(urllib.parse.unquote(response.text))
         except Exception as e: return {"error": str(e)}
 
-    # 🌟 [새 기능] 단지 목록 조회
     def get_estate_list(self, params: dict):
         token = self.get_access_token()
         if not token: return {"error": "CODEF 토큰 발급 실패"}
-        
         url = f"{self.base_url}/kr/public/lt/real-estate-board/estate-list"
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-        payload = {
-            "organization": "0011",
-            "addrSido": params.get("addr_sido", ""),
-            "addrSigun": params.get("addr_sigun", ""),
-            "addrDong": params.get("addr_dong", "")
-        }
+        payload = {"organization": "0011", "addrSido": params.get("addr_sido", ""), "addrSigun": params.get("addr_sigun", ""), "addrDong": params.get("addr_dong", "")}
         try:
             response = requests.post(url, headers=headers, json=payload)
             return json.loads(urllib.parse.unquote(response.text))
         except Exception as e: return {"error": str(e)}
 
-    # [기능 2] 시세정보 조회
     def get_market_price(self, params: dict):
         token = self.get_access_token()
         if not token: return {"error": "CODEF 토큰 발급 실패"}
-        
         url = f"{self.base_url}/kr/public/lt/real-estate-board/market-price-information"
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-        payload = {
-            "organization": "0011",
-            "searchGbn": params.get("search_gbn", "1"),
-            "complexNo": params.get("complex_no")
-        }
+        payload = {"organization": "0011", "searchGbn": params.get("search_gbn", "1"), "complexNo": params.get("complex_no")}
         try:
             response = requests.post(url, headers=headers, json=payload)
             return json.loads(urllib.parse.unquote(response.text))
@@ -155,31 +136,28 @@ class CodefService:
 
 codef = CodefService()
 
+
 # ==========================================
-# 🌟 3. 데이터 모델 및 API
+# 🌟 3. AI API 다중 키(로테이션) 설정
+# ==========================================
+# 쉼표(,)로 구분된 키들을 리스트 형태로 변환하여 저장합니다.
+api_keys_str = os.getenv("GEMINI_API_KEYS", "").strip().strip('"').strip("'")
+api_keys_list = [k.strip() for k in api_keys_str.split(",") if k.strip()]
+current_key_index = 0  # 현재 사용 중인 키의 순번
+
+
+# ==========================================
+# 🌟 4. 데이터 모델 및 API 엔드포인트
 # ==========================================
 class UserRegister(BaseModel): user_id: str; password: str; username: str = None
 class LoginRequest(BaseModel): user_id: str; password: str
-class RealEstateRequest(BaseModel):
-    user_id: str; addr_sido: str; addr_sigungu: str; addr_roadName: str = ""; addr_buildingNumber: str = ""; dong: str = ""; ho: str = ""; realtyType: str = "1" 
-
-# 🌟 새로 추가된 Pydantic 모델
-class EstateListRequest(BaseModel):
-    addr_sido: str
-    addr_sigun: str
-    addr_dong: str
-
-class MarketPriceRequest(BaseModel):
-    complex_no: str
-    search_gbn: str = "1"
-
+class RealEstateRequest(BaseModel): user_id: str; addr_sido: str; addr_sigungu: str; addr_roadName: str = ""; addr_buildingNumber: str = ""; dong: str = ""; ho: str = ""; realtyType: str = "1" 
+class EstateListRequest(BaseModel): addr_sido: str; addr_sigun: str; addr_dong: str
+class MarketPriceRequest(BaseModel): complex_no: str; search_gbn: str = "1"
 class ChatRequest(BaseModel): user_message: str; analysis_context: str
 
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
-
-api_key = os.getenv("GEMINI_API_KEY", "").strip().strip('"').strip("'")
-gemini_client = Client(api_key=api_key) if api_key else None
 
 @app.get("/ping")
 async def ping(): return {"message": "pong"}
@@ -215,7 +193,6 @@ async def fetch_info(request: RealEstateRequest, db: Session = Depends(get_db)):
 async def get_history(user_id: str, db: Session = Depends(get_db)):
     return db.query(RealEstateHistoryTable).filter(RealEstateHistoryTable.owner_id == user_id).order_by(RealEstateHistoryTable.created_at.desc()).all()
 
-# 🌟 [새로 추가됨] 단지 목록 조회 엔드포인트
 @app.post("/fetch-estate-list")
 async def fetch_estate_list(request: EstateListRequest):
     return codef.get_estate_list(request.dict())
@@ -224,25 +201,73 @@ async def fetch_estate_list(request: EstateListRequest):
 async def fetch_market_price(request: MarketPriceRequest):
     return codef.get_market_price(request.dict())
 
+# 🌟 계약서 분석 (자동 키 스위칭 로직 적용)
 @app.post("/analyze")
 async def analyze_contract(file: UploadFile = File(...)):
-    if not gemini_client: raise HTTPException(status_code=500, detail="Gemini API 키 오류")
+    global current_key_index
+    if not api_keys_list: raise HTTPException(status_code=500, detail="Gemini API 키가 서버에 설정되지 않았습니다.")
+    
     try:
         contents = await file.read()
         image_part = types.Part.from_bytes(data=contents, mime_type=file.content_type)
         prompt = "귀하는 대한민국 부동산 법률 분석 AI입니다. 계약서 이미지를 정밀 분석하여 위험도를 평가하고 마크다운 리포트를 작성하세요."
-        response = gemini_client.models.generate_content(model="gemini-2.0-flash", contents=[prompt, image_part])
-        return {"analysis": response.text}
-    except Exception as e: raise HTTPException(status_code=500, detail=str(e))
+        
+        attempts = 0
+        while attempts < len(api_keys_list):
+            try:
+                # 현재 순번의 키로 AI 클라이언트 생성
+                client = Client(api_key=api_keys_list[current_key_index])
+                response = client.models.generate_content(model="gemini-2.0-flash", contents=[prompt, image_part])
+                return {"analysis": response.text}
+            
+            except Exception as e:
+                error_msg = str(e).lower()
+                # 429 에러(한도 초과)가 발생하면 다음 키로 교체!
+                if "429" in error_msg or "quota" in error_msg or "exhausted" in error_msg:
+                    print(f"⚠️ {current_key_index + 1}번째 키 한도 초과! 다음 키로 교체합니다...")
+                    current_key_index = (current_key_index + 1) % len(api_keys_list)
+                    attempts += 1
+                else:
+                    raise HTTPException(status_code=500, detail=str(e))
+                    
+        # 모든 키를 다 돌았는데도 안 될 경우
+        raise HTTPException(status_code=429, detail="등록된 모든 API 키의 일일 한도가 초과되었습니다.")
+        
+    except Exception as e:
+        if isinstance(e, HTTPException): raise e
+        raise HTTPException(status_code=500, detail=str(e))
 
+# 🌟 챗봇 대화 (자동 키 스위칭 로직 적용)
 @app.post("/chat")
 async def chat_with_ai(request: ChatRequest):
-    if not gemini_client: raise HTTPException(status_code=500, detail="Gemini API 키 오류")
+    global current_key_index
+    if not api_keys_list: raise HTTPException(status_code=500, detail="Gemini API 키가 서버에 설정되지 않았습니다.")
+    
     try:
         sys_instruct = f"당신은 SafeHome AI 임대차 분쟁 전문가입니다. 다음 분석 결과를 바탕으로 상담하세요: {request.analysis_context}"
-        response = gemini_client.models.generate_content(
-            model="gemini-2.0-flash", contents=request.user_message,
-            config=types.GenerateContentConfig(system_instruction=sys_instruct, max_output_tokens=2048, temperature=0.7)
-        )
-        return {"reply": response.text}
-    except Exception as e: raise HTTPException(status_code=500, detail=str(e))
+        
+        attempts = 0
+        while attempts < len(api_keys_list):
+            try:
+                client = Client(api_key=api_keys_list[current_key_index])
+                response = client.models.generate_content(
+                    model="gemini-2.0-flash", 
+                    contents=request.user_message,
+                    config=types.GenerateContentConfig(system_instruction=sys_instruct, max_output_tokens=2048, temperature=0.7)
+                )
+                return {"reply": response.text}
+            
+            except Exception as e:
+                error_msg = str(e).lower()
+                if "429" in error_msg or "quota" in error_msg or "exhausted" in error_msg:
+                    print(f"⚠️ {current_key_index + 1}번째 키 한도 초과! 다음 키로 교체합니다...")
+                    current_key_index = (current_key_index + 1) % len(api_keys_list)
+                    attempts += 1
+                else:
+                    raise HTTPException(status_code=500, detail=str(e))
+                    
+        raise HTTPException(status_code=429, detail="등록된 모든 API 키의 일일 한도가 초과되었습니다.")
+        
+    except Exception as e:
+        if isinstance(e, HTTPException): raise e
+        raise HTTPException(status_code=500, detail=str(e))

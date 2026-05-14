@@ -163,7 +163,7 @@ function App() {
   const handlePayment = async () => {
     try {
       const response = await Bootpay.requestPayment({
-        "application_id": "Js-J8qI9S-hknFEl_Mf0Kw", 
+        "application_id": "6a05f83163e23a6f9b6085a1", 
         "price": 1000, 
         "order_name": "등기부등본 열람권 1회 충전", 
         "order_id": `ORD_${Date.now()}`,

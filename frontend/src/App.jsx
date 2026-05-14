@@ -114,7 +114,8 @@ function App() {
   const [isDragging, setIsDragging] = useState(false);
   const dragStart = useRef({ x: 0, y: 0 });
 
-  const [isPostcodeOpen, setIsPostcodeOpen] = useState(false);
+  const [postcodeMode, setPostcodeMode] = useState(null);
+  
   const [selectedAddress, setSelectedAddress] = useState(""); 
   const [regResult, setRegResult] = useState(null);
   const [regLoading, setRegLoading] = useState(false);
@@ -130,8 +131,6 @@ function App() {
   const [searchSido, setSearchSido] = useState("");
   const [searchSigun, setSearchSigun] = useState("");
   const [searchDong, setSearchDong] = useState("");
-  
-  // 🌟 시세조회 동/호 상태 추가
   const [marketDong, setMarketDong] = useState("");
   const [marketHo, setMarketHo] = useState("");
   
@@ -280,14 +279,11 @@ function App() {
     } catch { alert("단지 검색 실패!"); } finally { setEstateLoading(false); }
   };
 
-  // 🌟 동/호 파라미터를 추가하여 시세 조회 API 요청
   const handleFetchMarketPrice = async (complexNo) => {
     setMarketLoading(true); setMarketResult(null);
-    
-    // 입력값에서 '동', '호' 글자가 포함되어 있으면 제거
     const cleanDong = marketDong.replace(/동$/, '').trim();
     const cleanHo = marketHo.replace(/호$/, '').trim();
-    const searchGbn = (cleanDong && cleanHo) ? "2" : "1"; // 동,호 입력 시 호별 시세(2), 없으면 단지 평균(1)
+    const searchGbn = (cleanDong && cleanHo) ? "2" : "1";
 
     try {
       const res = await fetch(`${API_BASE_URL}/fetch-market-price`, { 
@@ -312,9 +308,22 @@ function App() {
 
   const handleCompletePostcode = (data) => {
     const sidoMap = { "서울": "서울특별시", "부산": "부산광역시", "대구": "대구광역시", "인천": "인천광역시", "광주": "광주광역시", "대전": "대전광역시", "울산": "울산광역시", "경기": "경기도", "충북": "충청북도", "충남": "충청남도", "전남": "전라남도", "경북": "경상북도", "경남": "경상남도", "세종": "세종특별자치시", "강원": "강원특별자치도", "전북": "전북특별자치도", "제주": "제주특별자치도" };
-    setRegSido(sidoMap[data.sido] || data.sido); setRegSigungu(data.sigungu); setRegRoadName(data.roadname);
-    const bldNumMatch = data.roadAddress.match(new RegExp(`${data.roadname} (\\d+(?:-\\d+)?)`));
-    setRegBldNum(bldNumMatch ? bldNumMatch[1] : ""); setSelectedAddress(data.roadAddress); setIsPostcodeOpen(false); 
+    const mappedSido = sidoMap[data.sido] || data.sido;
+
+    if (postcodeMode === 'market') {
+      setSearchSido(mappedSido);
+      setSearchSigun(data.sigungu);
+      setSearchDong(data.bname || ""); 
+      setPostcodeMode(null);
+    } else if (postcodeMode === 'register') {
+      setRegSido(mappedSido);
+      setRegSigungu(data.sigungu);
+      setRegRoadName(data.roadname);
+      const bldNumMatch = data.roadAddress.match(new RegExp(`${data.roadname} (\\d+(?:-\\d+)?)`));
+      setRegBldNum(bldNumMatch ? bldNumMatch[1] : "");
+      setSelectedAddress(data.roadAddress);
+      setPostcodeMode(null);
+    }
   };
 
   if (!isLoggedIn) return <Login onLoginSuccess={(id)=>{setIsLoggedIn(true); setUserId(id);}} />;
@@ -322,7 +331,6 @@ function App() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', backgroundColor: 'var(--bg-main)', color: 'var(--text)' }}>
       
-      {/* 모바일 헤더 */}
       <div className="mobile-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }} onClick={() => navTo('home')}>
           <ShieldCheck size={28} color="var(--accent)" />
@@ -335,7 +343,6 @@ function App() {
 
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
         
-        {/* 사이드바 */}
         <aside className={`sidebar ${isMobileMenuOpen ? 'open' : ''}`}>
           <div className="sidebar-logo" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px', cursor: 'pointer', marginBottom: '20px' }} onClick={() => navTo('home')}>
             <ShieldCheck size={28} color="var(--accent)" />
@@ -423,7 +430,7 @@ function App() {
                       <option value="1">🏢 집합건물 (아파트/빌라)</option>
                       <option value="0">🏠 토지/건물 (단독주택)</option>
                     </select>
-                    <button onClick={() => setIsPostcodeOpen(true)} className="main-btn" style={{ flex: 1, margin: 0 }}><MapPin /> 도로명 주소 검색</button>
+                    <button onClick={() => setPostcodeMode('register')} className="main-btn" style={{ flex: 1, margin: 0 }}><MapPin /> 도로명 주소 검색</button>
                   </div>
                   <input readOnly value={selectedAddress} placeholder="주소를 검색하세요" style={{ width: '100%', padding: '15px', marginBottom: '15px', borderRadius: '10px', border: '1px solid var(--border)', marginTop: '15px' }} />
                   <div className="input-group" style={{ marginBottom: '20px' }}>
@@ -573,12 +580,15 @@ function App() {
                 <section className="card" style={{ padding: '30px' }}>
                   <h3 className="card-title" style={{ color: 'var(--accent)', marginBottom: '30px' }}><TrendingUp /> 아파트 시세 상세 조회</h3>
                   
-                  {/* 🌟 동/호수 입력 UI 추가 🌟 */}
-                  <div className="input-group">
-                    <input placeholder="시/도 (예: 부산광역시)" value={searchSido} onChange={(e) => setSearchSido(e.target.value)} className="flex-input" />
-                    <input placeholder="시/군/구 (예: 진구)" value={searchSigun} onChange={(e) => setSearchSigun(e.target.value)} className="flex-input" />
-                    <input placeholder="읍/면/동 (예: 가야동)" value={searchDong} onChange={(e) => setSearchDong(e.target.value)} className="flex-input" />
+                  <div className="input-group" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
+                    <button onClick={() => setPostcodeMode('market')} className="main-btn" style={{ margin: 0, display: 'flex', alignItems: 'center', gap: '5px', whiteSpace: 'nowrap' }}>
+                      <MapPin size={18} /> 주소 검색
+                    </button>
+                    <input placeholder="시/도 (예: 서울특별시)" value={searchSido} onChange={(e) => setSearchSido(e.target.value)} className="flex-input" />
+                    <input placeholder="시/군/구 (예: 송파구)" value={searchSigun} onChange={(e) => setSearchSigun(e.target.value)} className="flex-input" />
+                    <input placeholder="읍/면/동 (예: 잠실동)" value={searchDong} onChange={(e) => setSearchDong(e.target.value)} className="flex-input" />
                   </div>
+                  
                   <div className="input-group" style={{ marginTop: '10px' }}>
                     <input placeholder="동 입력 (예: 101) - 선택" value={marketDong} onChange={(e) => setMarketDong(e.target.value)} className="flex-input" style={{ background: '#f8f9fa' }} />
                     <input placeholder="호수 입력 (예: 202) - 선택" value={marketHo} onChange={(e) => setMarketHo(e.target.value)} className="flex-input" style={{ background: '#f8f9fa' }} />
@@ -590,28 +600,12 @@ function App() {
                   <button onClick={handleSearchEstates} disabled={estateLoading} className="main-btn" style={{ width: '100%', marginBottom: '30px', marginTop: '15px' }}>
                     {estateLoading ? "단지 목록을 찾는 중..." : "해당 지역 단지 검색하기"}
                   </button>
-                  
-                  {estateList.length > 0 && !marketResult && (
-                    <div className="fade-in">
-                      <h4 style={{ marginBottom: '15px', color: 'var(--text)' }}>검색된 단지 목록 ({estateList.length}건)</h4>
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-                        {estateList.map((estate, idx) => (
-                          <div key={idx} onClick={() => handleFetchMarketPrice(estate.commComplexNo)} className="hover-card">
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
-                              <Building color="var(--accent)" />
-                              <span style={{ fontSize: '1.1rem', fontWeight: '500' }}>{estate.resComplexName}</span>
-                            </div>
-                            <span className="badge">시세 확인 ➔</span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
 
                   {marketLoading && <div style={{ textAlign: 'center', padding: '30px', color: '#888' }}>시세 정보를 불러오고 있습니다...</div>}
                   
+                  {/* 1. 선택한 아파트 시세 상세 정보 (먼저 보여줌) */}
                   {marketResult && marketResult.data && (
-                    <div className="fade-in" style={{ marginTop: '20px', borderTop: '2px solid var(--border)', paddingTop: '30px' }}>
+                    <div className="fade-in" style={{ marginTop: '20px', borderTop: '2px solid var(--accent)', paddingTop: '30px', marginBottom: '40px' }}>
                       <div className="market-header">
                         <div>
                           <span className="type-badge">{marketResult.data.resType || "아파트"}</span>
@@ -620,11 +614,10 @@ function App() {
                         </div>
                         <div style={{ textAlign: 'right' }}>
                           <p style={{ color: '#888', fontSize: '0.85rem', margin: '0 0 5px 0' }}>기준일: {marketResult.data.resFixedDate}</p>
-                          <button onClick={() => setMarketResult(null)} className="outline-btn">다른 단지 검색</button>
+                          <button onClick={() => setMarketResult(null)} className="outline-btn">닫기</button>
                         </div>
                       </div>
                       
-                      {/* 🌟 동/호수 데이터가 있을 경우와 단지 평균가일 경우를 나눠서 렌더링 🌟 */}
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                         {marketResult.data.resHoPriceList && marketResult.data.resHoPriceList.length > 0 ? (
                           <>
@@ -673,6 +666,43 @@ function App() {
                       </div>
                     </div>
                   )}
+
+                  {/* 2. 단지 목록 (항상 아래에 유지되도록 변경!) */}
+                  {estateList.length > 0 && (
+                    <div className="fade-in" style={{ borderTop: marketResult ? '2px dashed var(--border)' : 'none', paddingTop: marketResult ? '30px' : '0' }}>
+                      <h4 style={{ marginBottom: '15px', color: 'var(--text)' }}>
+                        {marketResult ? `📍 ${searchDong}의 다른 단지 목록` : `검색된 단지 목록 (${estateList.length}건)`}
+                      </h4>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                        {estateList.map((estate, idx) => {
+                          const isSelected = marketResult && marketResult.data && marketResult.data.resComplexName === estate.resComplexName;
+                          
+                          return (
+                            <div 
+                              key={idx} 
+                              onClick={() => { setMarketDong(""); setMarketHo(""); handleFetchMarketPrice(estate.commComplexNo); }} 
+                              className="hover-card" 
+                              style={{ 
+                                border: isSelected ? '2px solid var(--accent)' : '', 
+                                background: isSelected ? 'rgba(26, 115, 232, 0.05)' : ''
+                              }}
+                            >
+                              <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                                <Building color={isSelected ? "var(--accent)" : "#888"} />
+                                <span style={{ fontSize: '1.1rem', fontWeight: isSelected ? 'bold' : '500', color: isSelected ? 'var(--accent)' : 'var(--text)' }}>
+                                  {estate.resComplexName}
+                                </span>
+                              </div>
+                              <span className="badge" style={{ background: isSelected ? 'var(--accent)' : '', color: isSelected ? '#fff' : '' }}>
+                                {isSelected ? "현재 보는 중" : "시세 확인 ➔"}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
                 </section>
               </div>
             </div>
@@ -717,7 +747,8 @@ function App() {
         </div>
       )}
       <button className="floating-btn" onClick={() => setIsChatOpen(!isChatOpen)}><MessageSquare size={28} /></button>
-      {isPostcodeOpen && <div className="modal-overlay" onClick={() => setIsPostcodeOpen(false)}><div className="modal" onClick={(e) => e.stopPropagation()}><DaumPostcode onComplete={handleCompletePostcode} /></div></div>}
+      
+      {postcodeMode && <div className="modal-overlay" onClick={() => setPostcodeMode(null)}><div className="modal" onClick={(e) => e.stopPropagation()}><DaumPostcode onComplete={handleCompletePostcode} /></div></div>}
     </div>
   );
 }

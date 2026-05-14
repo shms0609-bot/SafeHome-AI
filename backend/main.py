@@ -59,7 +59,7 @@ def get_db():
         db.close()
 
 # ==========================================
-# 🌟 2. CODEF API 서비스
+# 🌟 2. CODEF API 서비스 (등기부 & 시세)
 # ==========================================
 class CodefService:
     def __init__(self):
@@ -159,7 +159,7 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 @app.get("/ping")
 async def ping(): return {"message": "pong"}
 
-# 🌟 [새 기능] 아이디 중복 확인 엔드포인트
+# 🌟 아이디 중복 확인 엔드포인트
 @app.get("/check-id/{user_id}")
 async def check_id(user_id: str, db: Session = Depends(get_db)):
     existing = db.query(UserTable).filter(UserTable.user_id == user_id).first()
@@ -206,6 +206,7 @@ async def fetch_estate_list(request: EstateListRequest):
 async def fetch_market_price(request: MarketPriceRequest):
     return codef.get_market_price(request.dict())
 
+# 🌟 계약서 분석 (이미지 화질 검사 프롬프트 추가)
 @app.post("/analyze")
 async def analyze_contract(file: UploadFile = File(...)):
     global current_key_index
@@ -214,7 +215,14 @@ async def analyze_contract(file: UploadFile = File(...)):
     try:
         contents = await file.read()
         image_part = types.Part.from_bytes(data=contents, mime_type=file.content_type)
-        prompt = "귀하는 대한민국 부동산 법률 분석 AI입니다. 계약서 이미지를 정밀 분석하여 위험도를 평가하고 마크다운 리포트를 작성하세요."
+        
+        # 🌟 새롭게 추가된 강력한 분석 명령어
+        prompt = """귀하는 대한민국 부동산 법률 분석 AI입니다. 
+        [중요 지시사항]
+        1. 가장 먼저 업로드된 계약서 이미지의 화질과 가독성을 확인하세요.
+        2. 글자가 너무 흐릿하거나, 빛 반사가 심하거나, 일부가 잘려 있어서 핵심 내용을 판독하기 어렵다면 분석을 중단하고 다음 문구만 출력하세요:
+        "⚠️ **이미지 판독 불가**\n\n계약서의 글자가 흐릿하거나 잘려서 정확한 권리 분석이 어렵습니다. 더 선명하게 문서 전체가 잘 보이는 사진으로 다시 업로드해 주세요."
+        3. 판독이 충분히 가능하다면, 계약서 이미지를 정밀 분석하여 위험도를 평가하고 상세한 마크다운 리포트를 작성하세요."""
         
         attempts = 0
         while attempts < len(api_keys_list):

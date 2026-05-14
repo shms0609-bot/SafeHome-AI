@@ -4,9 +4,8 @@ import { Sun, Moon, Send, FileSearch, Building2, ShieldCheck, MessageSquare, Arr
 import DaumPostcode from 'react-daum-postcode';
 import './App.css';
 
-const API_BASE_URL = "https://safehome-ai-1.onrender.com"; 
+const API_BASE_URL = "https://safehome-ai-pkkv.onrender.com"; 
 
-// 🌟 숫자를 한국식 '억, 만' 단위로 예쁘게 바꿔주는 함수
 const formatKoreanPrice = (priceStr) => {
   const num = Number(priceStr);
   if (!num || num === 0) return "-";
@@ -20,16 +19,62 @@ const formatKoreanPrice = (priceStr) => {
   return `${man.toLocaleString()}만원`;
 };
 
+// 🌟 로그인 & 회원가입 창 UI 대폭 개선
 function Login({ onLoginSuccess }) {
   const [isRegisterMode, setIsRegisterMode] = useState(false);
   const [id, setId] = useState("");
   const [pw, setPw] = useState("");
+  const [pwConfirm, setPwConfirm] = useState(""); // 비밀번호 확인용 State
   const [name, setName] = useState("");
+  
+  // 🌟 중복 확인 관련 State
+  const [isIdChecked, setIsIdChecked] = useState(false);
+  const [isIdAvailable, setIsIdAvailable] = useState(false);
+
+  // 아이디 입력값이 바뀌면 중복확인 통과 기록을 다시 초기화합니다.
+  const handleIdChange = (e) => {
+    setId(e.target.value);
+    setIsIdChecked(false);
+    setIsIdAvailable(false);
+  };
+
+  // 🌟 아이디 중복 확인 함수
+  const handleCheckId = async () => {
+    if (!id.trim()) return alert("아이디를 먼저 입력해주세요.");
+    try {
+      const res = await fetch(`${API_BASE_URL}/check-id/${id}`);
+      const data = await res.json();
+      
+      if (data.available) {
+        alert("사용 가능한 아이디입니다! ✅");
+        setIsIdAvailable(true);
+        setIsIdChecked(true);
+      } else {
+        alert("이미 사용 중인 아이디입니다. 다른 아이디를 입력해주세요. ❌");
+        setIsIdAvailable(false);
+        setIsIdChecked(true);
+      }
+    } catch (err) {
+      alert("중복 확인 통신에 실패했습니다.");
+    }
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    
+    // 🌟 회원가입 모드일 때 추가 검증 로직 작동
+    if (isRegisterMode) {
+      if (!isIdChecked || !isIdAvailable) {
+        return alert("아이디 중복 확인을 먼저 완료해주세요.");
+      }
+      if (pw !== pwConfirm) {
+        return alert("비밀번호와 비밀번호 확인이 일치하지 않습니다. 다시 확인해주세요.");
+      }
+    }
+
     const endpoint = isRegisterMode ? '/register' : '/login';
     const payload = isRegisterMode ? { user_id: id, password: pw, username: name } : { user_id: id, password: pw };
+    
     try {
       const res = await fetch(`${API_BASE_URL}${endpoint}`, {
         method: 'POST',
@@ -39,30 +84,62 @@ function Login({ onLoginSuccess }) {
       const data = await res.json();
       if (res.ok) {
         if (isRegisterMode) {
-          alert(`가입 성공! 로그인을 진행해 주세요.`);
-          setIsRegisterMode(false); setName("");
+          alert(`가입이 완료되었습니다! 로그인을 진행해 주세요. 🎉`);
+          setIsRegisterMode(false); 
+          setName("");
+          setPwConfirm("");
+          setIsIdChecked(false);
+          setIsIdAvailable(false);
         } else {
           localStorage.setItem('accessToken', data.access_token);
           localStorage.setItem('userId', id); 
           onLoginSuccess(id);
         }
-      } else { alert("오류: " + (data.detail || "정보를 확인하세요.")); }
-    } catch (err) { alert("서버 연결 실패!"); }
+      } else { 
+        alert("오류: " + (data.detail || "정보를 확인하세요.")); 
+      }
+    } catch (err) { 
+      alert("서버 연결 실패!"); 
+    }
   };
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'var(--bg-main)' }}>
-      <div style={{ background: 'var(--card-bg)', padding: '40px', borderRadius: '20px', boxShadow: '0 8px 24px rgba(0,0,0,0.1)', width: '100%', maxWidth: '400px', border: '1px solid var(--border)' }}>
+      <div style={{ background: 'var(--card-bg)', padding: '40px', borderRadius: '20px', boxShadow: '0 8px 24px rgba(0,0,0,0.1)', width: '100%', maxWidth: '420px', border: '1px solid var(--border)' }}>
         <h2 style={{ textAlign: 'center', marginBottom: '30px', color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
           <ShieldCheck size={32} /> {isRegisterMode ? "회원가입" : "로그인"}
         </h2>
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-          {isRegisterMode && <input type="text" placeholder="이름 (닉네임)" value={name} onChange={(e) => setName(e.target.value)} style={{ padding: '15px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-main)', color: 'var(--text)' }} required />}
-          <input type="text" placeholder="아이디" value={id} onChange={(e) => setId(e.target.value)} style={{ padding: '15px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-main)', color: 'var(--text)' }} required />
+          
+          {isRegisterMode && (
+            <input type="text" placeholder="이름 (닉네임)" value={name} onChange={(e) => setName(e.target.value)} style={{ padding: '15px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-main)', color: 'var(--text)' }} required />
+          )}
+          
+          {/* 🌟 아이디 입력 및 중복확인 버튼 영역 */}
+          <div style={{ display: 'flex', gap: '10px' }}>
+            <input type="text" placeholder="아이디" value={id} onChange={handleIdChange} style={{ flex: 1, padding: '15px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-main)', color: 'var(--text)' }} required />
+            {isRegisterMode && (
+              <button type="button" onClick={handleCheckId} style={{ padding: '0 15px', borderRadius: '12px', background: isIdAvailable ? '#e6f4ea' : 'var(--card-bg)', border: `1px solid ${isIdAvailable ? '#34a853' : 'var(--border)'}`, color: isIdAvailable ? '#34a853' : 'var(--text)', cursor: 'pointer', whiteSpace: 'nowrap', fontWeight: 'bold' }}>
+                {isIdAvailable ? "확인 완료" : "중복 확인"}
+              </button>
+            )}
+          </div>
+
           <input type="password" placeholder="비밀번호" value={pw} onChange={(e) => setPw(e.target.value)} style={{ padding: '15px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-main)', color: 'var(--text)' }} required />
+          
+          {/* 🌟 비밀번호 확인 입력 영역 */}
+          {isRegisterMode && (
+            <input type="password" placeholder="비밀번호 확인" value={pwConfirm} onChange={(e) => setPwConfirm(e.target.value)} style={{ padding: '15px', borderRadius: '12px', border: `1px solid ${pwConfirm && pw !== pwConfirm ? '#f44336' : 'var(--border)'}`, background: 'var(--bg-main)', color: 'var(--text)' }} required />
+          )}
+          
+          {/* 비밀번호 불일치 경고 메시지 */}
+          {isRegisterMode && pwConfirm && pw !== pwConfirm && (
+            <span style={{ color: '#f44336', fontSize: '0.85rem', marginTop: '-10px', marginLeft: '5px' }}>비밀번호가 일치하지 않습니다.</span>
+          )}
+
           <button type="submit" className="main-btn" style={{ padding: '15px', marginTop: '10px' }}>{isRegisterMode ? "가입하기" : "로그인"}</button>
         </form>
-        <button type="button" onClick={() => setIsRegisterMode(!isRegisterMode)} style={{ marginTop: '20px', background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', textDecoration: 'underline', width: '100%' }}>
+        <button type="button" onClick={() => { setIsRegisterMode(!isRegisterMode); setId(""); setPw(""); setPwConfirm(""); setIsIdChecked(false); setIsIdAvailable(false); }} style={{ marginTop: '20px', background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', textDecoration: 'underline', width: '100%' }}>
           {isRegisterMode ? "로그인으로 돌아가기" : "계정이 없으신가요? 회원가입"}
         </button>
       </div>
@@ -83,7 +160,6 @@ function App() {
   const [chatInput, setChatInput] = useState("");
   const [messages, setMessages] = useState([]);
 
-  // 등기 발급 State
   const [isPostcodeOpen, setIsPostcodeOpen] = useState(false);
   const [selectedAddress, setSelectedAddress] = useState(""); 
   const [regResult, setRegResult] = useState(null);
@@ -97,7 +173,6 @@ function App() {
   const [regRealtyType, setRegRealtyType] = useState("1");
   const [regHistory, setRegHistory] = useState([]); 
 
-  // 단지검색 & 시세조회 State
   const [searchSido, setSearchSido] = useState("");
   const [searchSigun, setSearchSigun] = useState("");
   const [searchDong, setSearchDong] = useState("");
@@ -255,7 +330,6 @@ function App() {
 
   return (
     <div style={{ display: 'flex', height: '100vh', overflow: 'hidden', backgroundColor: 'var(--bg-main)', color: 'var(--text)' }}>
-      {/* 🌟 사이드바 */}
       <aside style={{ width: '280px', background: 'var(--bg-main)', borderRight: '1px solid var(--border)', display: 'flex', flexDirection: 'column', padding: '15px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px', cursor: 'pointer', marginBottom: '20px' }} onClick={() => setCurrentView('home')}>
           <ShieldCheck size={28} color="var(--accent)" />
@@ -286,7 +360,6 @@ function App() {
         </div>
       </aside>
 
-      {/* 🌟 메인 컨텐츠 */}
       <main style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', overflow: 'hidden' }}>
         {currentView === 'home' && (
           <div className="fade-in" style={{ flex: 1, overflowY: 'auto', padding: '60px 40px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -440,7 +513,6 @@ function App() {
           </div>
         )}
 
-        {/* 시세 조회 화면 */}
         {currentView === 'market' && (
           <div className="fade-in" style={{ flex: 1, padding: '40px', overflowY: 'auto' }}>
             <button className="back-btn" onClick={() => setCurrentView('home')}><ArrowLeft size={20}/> 뒤로가기</button>

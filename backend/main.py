@@ -59,7 +59,7 @@ def get_db():
         db.close()
 
 # ==========================================
-# 🌟 2. CODEF API 서비스 (등기부 & 시세)
+# 🌟 2. CODEF API 서비스
 # ==========================================
 class CodefService:
     def __init__(self):
@@ -136,14 +136,12 @@ class CodefService:
 
 codef = CodefService()
 
-
 # ==========================================
-# 🌟 3. AI API 다중 키(로테이션) 자동화 로직
+# 🌟 3. AI API 다중 키(로테이션) 로직
 # ==========================================
 api_keys_str = os.getenv("GEMINI_API_KEYS", "").strip().strip('"').strip("'")
 api_keys_list = [k.strip() for k in api_keys_str.split(",") if k.strip()]
 current_key_index = 0  
-
 
 # ==========================================
 # 🌟 4. 데이터 모델 및 API 엔드포인트
@@ -160,6 +158,14 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 
 @app.get("/ping")
 async def ping(): return {"message": "pong"}
+
+# 🌟 [새 기능] 아이디 중복 확인 엔드포인트
+@app.get("/check-id/{user_id}")
+async def check_id(user_id: str, db: Session = Depends(get_db)):
+    existing = db.query(UserTable).filter(UserTable.user_id == user_id).first()
+    if existing:
+        return {"available": False}
+    return {"available": True}
 
 @app.post("/register")
 async def register(user_data: UserRegister, db: Session = Depends(get_db)):
@@ -200,7 +206,6 @@ async def fetch_estate_list(request: EstateListRequest):
 async def fetch_market_price(request: MarketPriceRequest):
     return codef.get_market_price(request.dict())
 
-# 🌟 계약서 분석 (자동 키 스위칭 로직)
 @app.post("/analyze")
 async def analyze_contract(file: UploadFile = File(...)):
     global current_key_index
@@ -217,26 +222,20 @@ async def analyze_contract(file: UploadFile = File(...)):
                 client = Client(api_key=api_keys_list[current_key_index])
                 response = client.models.generate_content(model="gemini-2.5-flash", contents=[prompt, image_part])
                 return {"analysis": response.text}
-            
             except Exception as e:
                 error_msg = str(e).lower()
                 print(f"\n🚨 [디버깅] {current_key_index + 1}번째 키에서 에러 발생: {str(e)}\n")
-                
-                # 한도 초과 에러 감지 시 다음 키로 이동
                 if "429" in error_msg or "quota" in error_msg or "exhausted" in error_msg:
                     print(f"⚠️ {current_key_index + 1}번째 키 한도 초과! 다음 키로 교체합니다...")
                     current_key_index = (current_key_index + 1) % len(api_keys_list)
                     attempts += 1
                 else:
                     raise HTTPException(status_code=500, detail=str(e))
-                    
         raise HTTPException(status_code=429, detail="등록된 모든 API 키의 일일 한도가 초과되었습니다.")
-        
     except Exception as e:
         if isinstance(e, HTTPException): raise e
         raise HTTPException(status_code=500, detail=str(e))
 
-# 🌟 챗봇 대화 (자동 키 스위칭 로직)
 @app.post("/chat")
 async def chat_with_ai(request: ChatRequest):
     global current_key_index
@@ -244,7 +243,6 @@ async def chat_with_ai(request: ChatRequest):
     
     try:
         sys_instruct = f"당신은 SafeHome AI 임대차 분쟁 전문가입니다. 다음 분석 결과를 바탕으로 상담하세요: {request.analysis_context}"
-        
         attempts = 0
         while attempts < len(api_keys_list):
             try:
@@ -255,20 +253,16 @@ async def chat_with_ai(request: ChatRequest):
                     config=types.GenerateContentConfig(system_instruction=sys_instruct, max_output_tokens=2048, temperature=0.7)
                 )
                 return {"reply": response.text}
-            
             except Exception as e:
                 error_msg = str(e).lower()
                 print(f"\n🚨 [디버깅] {current_key_index + 1}번째 키에서 에러 발생: {str(e)}\n")
-                
                 if "429" in error_msg or "quota" in error_msg or "exhausted" in error_msg:
                     print(f"⚠️ {current_key_index + 1}번째 키 한도 초과! 다음 키로 교체합니다...")
                     current_key_index = (current_key_index + 1) % len(api_keys_list)
                     attempts += 1
                 else:
                     raise HTTPException(status_code=500, detail=str(e))
-                    
         raise HTTPException(status_code=429, detail="등록된 모든 API 키의 일일 한도가 초과되었습니다.")
-        
     except Exception as e:
         if isinstance(e, HTTPException): raise e
         raise HTTPException(status_code=500, detail=str(e))

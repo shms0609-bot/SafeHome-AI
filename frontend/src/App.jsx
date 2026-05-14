@@ -211,7 +211,7 @@ function App() {
   const handlePayment = async () => {
     try {
       const response = await Bootpay.requestPayment({
-        "application_id": "5b8f6a4d396fa665fdc2b5e7", // 부트페이 공식 테스트 키
+        "application_id": "Js-J8qI9S-hknFEl_Mf0Kw", // 부트페이 공식 테스트 키
         "price": 1000,
         "order_name": "등기부등본 열람권 1회 충전",
         "order_id": `ORDER_${new Date().getTime()}`,

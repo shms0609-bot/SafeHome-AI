@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Sun, Moon, Send, FileSearch, Building2, ShieldCheck, MessageSquare, ArrowLeft, Upload, Search, MapPin, LogOut, Plus, Archive, TrendingUp, Building } from 'lucide-react';
+import { Sun, Moon, Send, FileSearch, Building2, ShieldCheck, MessageSquare, ArrowLeft, Upload, Search, MapPin, LogOut, Plus, Archive, TrendingUp, Building, Maximize2 } from 'lucide-react';
 import DaumPostcode from 'react-daum-postcode';
 import './App.css';
 
@@ -142,12 +142,12 @@ function App() {
   const [analysis, setAnalysis] = useState("");
   const [loading, setLoading] = useState(false);
   
-  // 🌟 [계약서 전용] 상담 State
+  // [계약서 전용] 상담 State
   const [chatLoading, setChatLoading] = useState(false);
   const [chatInput, setChatInput] = useState("");
   const [messages, setMessages] = useState([]);
 
-  // 🌟 [자유 챗봇 팝업 전용] 분리된 State
+  // 🌟 [자유 챗봇 전용] 팝업 & 전체화면이 공유하는 State
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [freeChatLoading, setFreeChatLoading] = useState(false);
   const [freeChatInput, setFreeChatInput] = useState("");
@@ -179,8 +179,9 @@ function App() {
   const [marketResult, setMarketResult] = useState(null);
   const [marketLoading, setMarketLoading] = useState(false);
 
-  const scrollRef = useRef(null);
-  const freeChatScrollRef = useRef(null);
+  const scrollRef = useRef(null); // 계약서 상담용
+  const freeChatScrollRef = useRef(null); // 팝업 챗봇용
+  const fullScreenChatScrollRef = useRef(null); // 🌟 전체화면 챗봇용
 
   useEffect(() => {
     const token = localStorage.getItem('accessToken');
@@ -198,8 +199,11 @@ function App() {
   };
 
   useEffect(() => { document.documentElement.setAttribute('data-theme', theme); }, [theme]);
+  
+  // 스크롤 자동 이동 처리
   useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [messages, chatLoading, currentView]);
   useEffect(() => { if (freeChatScrollRef.current) freeChatScrollRef.current.scrollTop = freeChatScrollRef.current.scrollHeight; }, [freeMessages, freeChatLoading, isChatOpen]);
+  useEffect(() => { if (fullScreenChatScrollRef.current) fullScreenChatScrollRef.current.scrollTop = fullScreenChatScrollRef.current.scrollHeight; }, [freeMessages, freeChatLoading, currentView]);
 
   const fetchRegHistory = async () => {
     if (!userId) return;
@@ -234,12 +238,11 @@ function App() {
       const data = await res.json();
       if (res.ok) {
         setAnalysis(data.analysis);
-        setCurrentView('history'); // 🌟 분석 완료 시 '계약서 전용 상담' 화면으로 즉시 이동!
+        setCurrentView('history'); 
       } else throw new Error(data.detail);
     } catch (err) { alert("분석 실패: " + err.message); } finally { setLoading(false); }
   };
 
-  // 🌟 계약서 분석 기반 전용 상담 핸들러
   const handleChat = async () => {
     if (!chatInput.trim()) return;
     const newMsgs = [...messages, { role: 'user', text: chatInput }];
@@ -255,7 +258,7 @@ function App() {
     } catch (err) { alert("채팅 실패!"); } finally { setChatLoading(false); }
   };
 
-  // 🌟 자유 대화형 플로팅 챗봇 핸들러
+  // 🌟 자유 대화형 챗봇 핸들러 (팝업과 전체화면 모두 이 함수를 씁니다)
   const handleFreeChat = async () => {
     if (!freeChatInput.trim()) return;
     const newMsgs = [...freeMessages, { role: 'user', text: freeChatInput }];
@@ -266,7 +269,6 @@ function App() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           user_message: freeChatInput, 
-          // 분석 결과 대신 자유 대화용 시스템 지시어를 넘겨줍니다.
           analysis_context: "현재는 문서 분석 모드가 아닌 자유 대화 모드입니다. 사용자의 일반적인 부동산 관련 질문이나 용어, 전세사기 예방 등에 대해 친절하고 전문적으로 자유롭게 답변해주세요." 
         })
       });
@@ -379,12 +381,15 @@ function App() {
         </button>
         <div style={{ flex: 1, overflowY: 'auto' }}>
           <div style={{ fontSize: '0.85rem', color: '#888', padding: '0 10px', marginBottom: '10px', fontWeight: '600' }}>메뉴</div>
-          {/* 🌟 보관함은 왼쪽 메뉴에만 깔끔하게 유지 */}
           <div onClick={() => setCurrentView('archive')} style={{ padding: '12px 15px', borderRadius: '10px', cursor: 'pointer', background: currentView === 'archive' ? 'var(--card-bg)' : 'transparent', display: 'flex', alignItems: 'center', gap: '12px', fontSize: '0.95rem' }}>
             <Archive size={18} color="var(--accent)" /> 내 등기부 보관함
           </div>
           <div onClick={() => setCurrentView('history')} style={{ padding: '12px 15px', borderRadius: '10px', cursor: 'pointer', background: currentView === 'history' ? 'var(--card-bg)' : 'transparent', display: 'flex', alignItems: 'center', gap: '12px', fontSize: '0.95rem' }}>
-            <MessageSquare size={18} color="var(--accent)" /> 계약서 AI 상담
+            <FileSearch size={18} color="var(--accent)" /> 계약서 AI 상담
+          </div>
+          {/* 🌟 전체화면 챗봇 메뉴 추가 */}
+          <div onClick={() => { setCurrentView('freechat'); setIsChatOpen(false); }} style={{ padding: '12px 15px', borderRadius: '10px', cursor: 'pointer', background: currentView === 'freechat' ? 'var(--card-bg)' : 'transparent', display: 'flex', alignItems: 'center', gap: '12px', fontSize: '0.95rem' }}>
+            <Maximize2 size={18} color="var(--accent)" /> 전체화면 AI 상담
           </div>
           <div onClick={() => setCurrentView('market')} style={{ padding: '12px 15px', borderRadius: '10px', cursor: 'pointer', background: currentView === 'market' ? 'var(--card-bg)' : 'transparent', display: 'flex', alignItems: 'center', gap: '12px', fontSize: '0.95rem' }}>
             <TrendingUp size={18} color="var(--accent)" /> 아파트 시세 조회
@@ -420,11 +425,16 @@ function App() {
                 <h4>아파트 시세 조회</h4>
                 <p>최신 면적별 실거래가와 전세가를 한눈에 확인하세요.</p>
               </div>
-              {/* 🌟 메인 화면에는 보관함 대신 '계약서 AI 상담' 아이콘 노출 */}
               <div className="service-card" onClick={() => setCurrentView('history')}>
                 <div className="icon-wrapper yellow"><MessageSquare size={40} color="white" /></div>
                 <h4>계약서 AI 상담</h4>
                 <p>분석된 계약서 결과를 바탕으로 AI와 깊이 있게 상담하세요.</p>
+              </div>
+              {/* 🌟 메인 화면에도 전체화면 챗봇 바로가기 추가 */}
+              <div className="service-card" onClick={() => setCurrentView('freechat')} style={{ gridColumn: 'span 2' }}>
+                <div className="icon-wrapper" style={{ background: '#9c27b0' }}><Maximize2 size={40} color="white" /></div>
+                <h4>전체화면 AI 자유 상담</h4>
+                <p>넓고 쾌적한 화면에서 부동산 관련 궁금증을 자유롭게 물어보세요.</p>
               </div>
             </div>
           </div>
@@ -470,7 +480,6 @@ function App() {
           </div>
         )}
 
-        {/* 🌟 계약서를 바탕으로 깊게 묻고 답하는 쾌적한 전용 상담 화면 */}
         {currentView === 'history' && (
           <div className="fade-in" style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', maxWidth: '1000px', margin: '0 auto', width: '100%' }}>
             <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: '40px 20px', display: 'flex', flexDirection: 'column', gap: '30px' }}>
@@ -510,6 +519,38 @@ function App() {
               <div style={{ display: 'flex', background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: '30px', padding: '10px 20px', alignItems: 'center' }}>
                 <input value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder={analysis ? "위 계약서 내용에 대해 궁금한 점을 질문해 보세요..." : "계약서를 먼저 분석해 주세요."} disabled={!analysis} style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: 'var(--text)', fontSize: '1rem', padding: '10px' }} onKeyPress={(e) => e.key === 'Enter' && analysis && handleChat()} />
                 <button onClick={handleChat} disabled={!analysis} style={{ background: 'var(--accent)', border: 'none', cursor: analysis ? 'pointer' : 'not-allowed', color: '#fff', width: '45px', height: '45px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: analysis ? 1 : 0.5 }}><Send size={20} style={{ marginLeft: '3px' }}/></button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 🌟 팝업과 대화 기록이 연동되는 '전체화면 자유 상담' UI */}
+        {currentView === 'freechat' && (
+          <div className="fade-in" style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', maxWidth: '1000px', margin: '0 auto', width: '100%' }}>
+            <div ref={fullScreenChatScrollRef} style={{ flex: 1, overflowY: 'auto', padding: '40px 20px', display: 'flex', flexDirection: 'column', gap: '30px' }}>
+              {freeMessages.length === 0 && (
+                <div style={{ textAlign: 'center', color: '#888', marginTop: '100px' }}>
+                  <MessageSquare size={50} color="var(--accent)" style={{ marginBottom: '15px', opacity: 0.5 }} />
+                  <h3>부동산 자유 상담을 시작해보세요!</h3>
+                  <p>전세사기 예방, 부동산 용어, 법률 지식 등 무엇이든 편하게 물어보세요.</p>
+                </div>
+              )}
+
+              {freeMessages.map((m, i) => (
+                <div key={i} style={{ display: 'flex', gap: '15px', flexDirection: m.role === 'user' ? 'row-reverse' : 'row' }}>
+                  {m.role === 'ai' && <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', flexShrink: 0 }}><ShieldCheck size={24}/></div>}
+                  <div style={{ maxWidth: '80%', background: m.role === 'user' ? '#f0f4f9' : 'var(--card-bg)', color: m.role === 'user' ? '#111' : 'var(--text)', padding: '20px', borderRadius: '15px', border: m.role === 'user' ? 'none' : '1px solid var(--border)', lineHeight: '1.6' }}>
+                    <div className="md-content"><ReactMarkdown>{m.text}</ReactMarkdown></div>
+                  </div>
+                </div>
+              ))}
+              {freeChatLoading && <div style={{ display: 'flex', gap: '15px' }}><div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}><ShieldCheck size={24}/></div><div style={{ padding: '20px', background: 'var(--card-bg)', borderRadius: '15px', border: '1px solid var(--border)', color: '#888' }}>답변을 작성하고 있습니다...</div></div>}
+            </div>
+            
+            <div style={{ padding: '20px 40px', background: 'var(--bg-main)' }}>
+              <div style={{ display: 'flex', background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: '30px', padding: '10px 20px', alignItems: 'center' }}>
+                <input value={freeChatInput} onChange={(e) => setFreeChatInput(e.target.value)} placeholder={"부동산에 관한 궁금증을 자유롭게 질문해 보세요!"} style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: 'var(--text)', fontSize: '1rem', padding: '10px' }} onKeyPress={(e) => e.key === 'Enter' && handleFreeChat()} />
+                <button onClick={handleFreeChat} style={{ background: 'var(--accent)', border: 'none', cursor: 'pointer', color: '#fff', width: '45px', height: '45px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Send size={20} style={{ marginLeft: '3px' }}/></button>
               </div>
             </div>
           </div>
@@ -644,7 +685,7 @@ function App() {
         )}
       </main>
 
-      {/* 🌟 계약서 없이 묻고 답하는 무제한 자유 대화 플로팅 챗봇 🌟 */}
+      {/* 🌟 팝업 창 하단 여백 추가로 네이티브 크기 조절 손잡이가 노출되도록 완벽 해결 */}
       {isChatOpen && (
         <div style={{
           position: 'fixed', right: '30px', bottom: '100px',
@@ -655,7 +696,7 @@ function App() {
           background: 'var(--bg-main)', border: '1px solid var(--border)',
           borderRadius: '15px', boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
           display: 'flex', flexDirection: 'column', zIndex: 9999,
-          resize: 'both', overflow: 'hidden' 
+          resize: 'both', overflow: 'hidden', paddingBottom: '10px' 
         }}>
           <div
             onPointerDown={handleDragStart}
@@ -671,7 +712,11 @@ function App() {
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold' }}>
               <MessageSquare size={20} /> 부동산 자유 질문 챗봇
             </div>
-            <button onClick={() => setIsChatOpen(false)} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontSize: '1.2rem' }}>✖</button>
+            {/* 전체화면 전환 버튼과 닫기 버튼 */}
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button onClick={() => { setIsChatOpen(false); setCurrentView('freechat'); }} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer' }} title="전체화면으로 보기"><Maximize2 size={16} /></button>
+              <button onClick={() => setIsChatOpen(false)} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontSize: '1.2rem', lineHeight: '1' }}>✖</button>
+            </div>
           </div>
 
           <div ref={freeChatScrollRef} style={{ flex: 1, overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: '15px', background: 'var(--card-bg)' }}>
@@ -695,8 +740,7 @@ function App() {
             {freeChatLoading && <div style={{ display: 'flex', gap: '10px' }}><div style={{ width: '35px', height: '35px', borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}><ShieldCheck size={20}/></div><div style={{ padding: '15px', background: 'var(--bg-main)', borderRadius: '15px', border: '1px solid var(--border)', color: '#888', fontSize: '0.95rem' }}>답변을 고민하고 있습니다...</div></div>}
           </div>
 
-          {/* 제한 없이 언제나 입력 가능한 자유 대화창 */}
-          <div style={{ padding: '15px', borderTop: '1px solid var(--border)', background: 'var(--bg-main)', display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div style={{ padding: '15px', borderTop: '1px solid var(--border)', background: 'transparent', display: 'flex', alignItems: 'center', gap: '10px' }}>
             <input value={freeChatInput} onChange={(e) => setFreeChatInput(e.target.value)} placeholder={"부동산 관련 자유롭게 질문해보세요!"} style={{ flex: 1, padding: '12px', borderRadius: '20px', border: '1px solid var(--border)', background: 'var(--card-bg)', color: 'var(--text)', outline: 'none' }} onKeyPress={(e) => e.key === 'Enter' && handleFreeChat()} />
             <button onClick={handleFreeChat} style={{ background: 'var(--accent)', border: 'none', cursor: 'pointer', color: '#fff', width: '40px', height: '40px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><Send size={18} style={{ marginLeft: '2px' }}/></button>
           </div>

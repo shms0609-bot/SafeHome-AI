@@ -2,6 +2,9 @@ import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Sun, Moon, Send, FileSearch, Building2, ShieldCheck, MessageSquare, ArrowLeft, Upload, Search, MapPin, LogOut, Plus, Archive, TrendingUp, Building, Maximize2, Menu, X } from 'lucide-react';
 import DaumPostcode from 'react-daum-postcode';
+
+// 🌟 부트페이 결제 라이브러리
+import { Bootpay } from '@bootpay/client-js';
 import './App.css';
 
 const API_BASE_URL = "https://safehome-ai-pkkv.onrender.com"; 
@@ -73,6 +76,7 @@ function Login({ onLoginSuccess }) {
       const data = await res.json();
       if (res.ok) {
         if (isRegisterMode) {
+          // 🌟 0장 지급이므로 가입 완료 문구만 깔끔하게 출력
           alert(`가입이 완료되었습니다! 로그인을 진행해 주세요. 🎉`);
           setIsRegisterMode(false); setName(""); setPwConfirm(""); setIsIdChecked(false); setIsIdAvailable(false);
         } else {
@@ -122,26 +126,24 @@ function App() {
   const [analysis, setAnalysis] = useState("");
   const [loading, setLoading] = useState(false);
   
-  // 모바일 메뉴 제어용 State 추가
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // [계약서 전용] 상담 State
+  // 🌟 내 티켓 정보 State
+  const [tickets, setTickets] = useState(0);
+
   const [chatLoading, setChatLoading] = useState(false);
   const [chatInput, setChatInput] = useState("");
   const [messages, setMessages] = useState([]);
 
-  // [자유 챗봇 전용] 팝업 & 메인화면 공유 State
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [freeChatLoading, setFreeChatLoading] = useState(false);
   const [freeChatInput, setFreeChatInput] = useState("");
   const [freeMessages, setFreeMessages] = useState([]);
 
-  // 팝업 챗봇 드래그
   const [chatOffset, setChatOffset] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const dragStart = useRef({ x: 0, y: 0 });
 
-  // 등기 및 시세 State
   const [isPostcodeOpen, setIsPostcodeOpen] = useState(false);
   const [selectedAddress, setSelectedAddress] = useState(""); 
   const [regResult, setRegResult] = useState(null);
@@ -173,6 +175,15 @@ function App() {
     if (token && savedUserId) { setIsLoggedIn(true); setUserId(savedUserId); }
   }, []);
 
+  // 🌟 사용자가 로그인하면 DB에서 남은 티켓 수를 가져옵니다.
+  useEffect(() => {
+    if (isLoggedIn && userId) {
+      fetch(`${API_BASE_URL}/user-info/${userId}`)
+        .then(res => res.json())
+        .then(data => { if (data.tickets !== undefined) setTickets(data.tickets); });
+    }
+  }, [isLoggedIn, userId]);
+
   const handleLogout = () => { localStorage.clear(); setIsLoggedIn(false); setCurrentView('home'); };
 
   useEffect(() => { document.documentElement.setAttribute('data-theme', theme); }, [theme]);
@@ -193,8 +204,53 @@ function App() {
 
   const navTo = (view) => {
     setCurrentView(view);
-    setIsMobileMenuOpen(false); // 메뉴 이동 시 모바일 사이드바 닫기
+    setIsMobileMenuOpen(false); 
   }
+
+  // 🌟 부트페이 결제창 호출 및 티켓 충전 로직
+  const handlePayment = async () => {
+    try {
+      const response = await Bootpay.requestPayment({
+        "application_id": "5b8f6a4d396fa665fdc2b5e7", // 부트페이 공식 테스트 키
+        "price": 1000,
+        "order_name": "등기부등본 열람권 1회 충전",
+        "order_id": `ORDER_${new Date().getTime()}`,
+        "pg": "kcp",
+        "method": "card",
+        "tax_free": 0,
+        "user": {
+          "id": userId,
+          "username": "고객님"
+        },
+        "extra": {
+          "open_type": "iframe",
+          "card_quota": "0,2,3",
+          "escrow": false
+        }
+      });
+
+      switch (response.event) {
+        case 'done':
+          const verifyRes = await fetch(`${API_BASE_URL}/payment/verify`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ receipt_id: response.data.receipt_id, user_id: userId })
+          });
+          const result = await verifyRes.json();
+          if (result.success) {
+            alert("결제 완료! 열람권 1장이 충전되었습니다. 🎫");
+            setTickets(result.tickets);
+          }
+          break;
+      }
+    } catch (e) {
+      if(e.event === 'cancel') {
+          console.log('사용자가 결제를 취소했습니다.');
+      } else {
+          console.error(e.message);
+      }
+    }
+  };
 
   const handleCompletePostcode = (data) => {
     const sidoMap = { "서울": "서울특별시", "부산": "부산광역시", "대구": "대구광역시", "인천": "인천광역시", "광주": "광주광역시", "대전": "대전광역시", "울산": "울산광역시", "경기": "경기도", "충북": "충청북도", "충남": "충청남도", "전남": "전라남도", "경북": "경상북도", "경남": "경상남도", "세종": "세종특별자치시", "강원": "강원특별자치도", "전북": "전북특별자치도", "제주": "제주특별자치도" };
@@ -243,7 +299,20 @@ function App() {
     setRegLoading(true);
     try {
       const res = await fetch(`${API_BASE_URL}/fetch-real-estate`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ user_id: userId, addr_sido: regSido, addr_sigungu: regSigungu, addr_roadName: regRoadName, addr_buildingNumber: regBldNum, dong: regDong, ho: regHo, realtyType: regRealtyType }) });
-      const data = await res.json(); setRegResult(data); if (data.data) fetchRegHistory();
+      const data = await res.json(); 
+      
+      // 티켓 부족 에러 처리
+      if (data.error) {
+        alert(data.error); 
+        setRegResult(null);
+      } else {
+        setRegResult(data); 
+        // 🌟 성공적으로 발급되었다면 티켓 1장 차감
+        if (data.data || (data.result && data.result.code === "CF-00000")) {
+          fetchRegHistory();
+          setTickets(prev => prev - 1);
+        }
+      }
     } catch (err) { alert("조회 실패!"); } finally { setRegLoading(false); }
   };
 
@@ -285,7 +354,6 @@ function App() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', backgroundColor: 'var(--bg-main)', color: 'var(--text)' }}>
       
-      {/* 🌟 모바일 전용 상단 헤더 (햄버거 메뉴) */}
       <div className="mobile-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }} onClick={() => navTo('home')}>
           <ShieldCheck size={28} color="var(--accent)" />
@@ -297,7 +365,6 @@ function App() {
       </div>
 
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
-        {/* 🌟 반응형 사이드바 */}
         <aside className={`sidebar ${isMobileMenuOpen ? 'open' : ''}`}>
           <div className="sidebar-logo" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px', cursor: 'pointer', marginBottom: '20px' }} onClick={() => navTo('home')}>
             <ShieldCheck size={28} color="var(--accent)" />
@@ -314,7 +381,6 @@ function App() {
             <div onClick={() => navTo('history')} className={`menu-item ${currentView === 'history' ? 'active' : ''}`}>
               <FileSearch size={18} color="var(--accent)" /> 계약서 AI 상담
             </div>
-            {/* 🌟 어감 구린 이름 수정됨: AI 상담 */}
             <div onClick={() => { navTo('freechat'); setIsChatOpen(false); }} className={`menu-item ${currentView === 'freechat' ? 'active' : ''}`}>
               <MessageSquare size={18} color="var(--accent)" /> AI 상담
             </div>
@@ -332,7 +398,6 @@ function App() {
           </div>
         </aside>
 
-        {/* 🌟 반응형 메인 컨텐츠 영역 */}
         <main className="main-content">
           {currentView === 'home' && (
             <div className="fade-in" style={{ flex: 1, overflowY: 'auto', padding: '40px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -358,7 +423,6 @@ function App() {
                   <h4>계약서 AI 상담</h4>
                   <p>분석된 계약서 결과를 바탕으로 AI와 깊이 있게 상담하세요.</p>
                 </div>
-                {/* 🌟 메인 화면 이름 변경 */}
                 <div className="service-card wide-card" onClick={() => navTo('freechat')}>
                   <div className="icon-wrapper" style={{ background: '#9c27b0' }}><MessageSquare size={40} color="white" /></div>
                   <h4>AI 상담</h4>
@@ -452,7 +516,6 @@ function App() {
             </div>
           )}
 
-          {/* 🌟 전체화면 AI 상담 (모바일 대응 UI) */}
           {currentView === 'freechat' && (
             <div className="fade-in" style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', maxWidth: '1000px', margin: '0 auto', width: '100%' }}>
               <div ref={fullScreenChatScrollRef} style={{ flex: 1, overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: '20px' }}>
@@ -487,7 +550,17 @@ function App() {
               <button className="back-btn" onClick={() => navTo('home')}><ArrowLeft size={20}/> 뒤로가기</button>
               <div style={{ maxWidth: '800px', margin: '0 auto', marginTop: '20px' }}>
                 <section className="card" style={{ padding: '30px' }}>
+                  
+                  {/* 🌟 티켓 정보 및 결제창 호출 버튼 🌟 */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', padding: '15px 20px', background: 'var(--bg-main)', borderRadius: '15px', border: '1px solid var(--accent)' }}>
+                    <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: 'var(--text)' }}>
+                      🎫 내 열람권: <span style={{ color: 'var(--accent)', fontSize: '1.4rem', marginLeft: '5px' }}>{tickets}</span>장
+                    </div>
+                    <button onClick={handlePayment} className="main-btn" style={{ margin: 0, padding: '10px 20px', fontSize: '0.95rem' }}>충전하기 (1,000원)</button>
+                  </div>
+
                   <h3 className="card-title" style={{ color: 'var(--accent)', marginBottom: '30px' }}><Building2 /> 부동산 실시간 등기 발급</h3>
+                  
                   <div className="input-group">
                     <select value={regRealtyType} onChange={(e) => setRegRealtyType(e.target.value)} style={{ padding: '15px', borderRadius: '10px', border: '1px solid var(--border)' }}>
                       <option value="1">🏢 집합건물 (아파트/빌라)</option>
@@ -501,7 +574,7 @@ function App() {
                     <input placeholder="호 (예: 202호)" value={regHo} onChange={(e) => setRegHo(e.target.value)} style={{ flex: 1, padding: '15px', borderRadius: '10px', border: '1px solid var(--border)' }} />
                   </div>
                   <button onClick={handleFetchRegister} disabled={regLoading} className="main-btn" style={{ width: '100%', display: 'flex', justifyContent: 'center', gap: '10px' }}>
-                    <Building2 size={20} /> {regLoading ? "대법원 통신 중..." : "등기부등본 가져오기 (캐시 차감)"}
+                    <Building2 size={20} /> {regLoading ? "대법원 통신 중..." : "등기부등본 가져오기 (열람권 1장 차감)"}
                   </button>
                   
                   {regResult && (
@@ -605,7 +678,6 @@ function App() {
         </main>
       </div>
 
-      {/* 🌟 모바일 대응 & 리사이즈 완벽 해결된 팝업 챗봇 🌟 */}
       {isChatOpen && (
         <div className="chat-popup" style={{ transform: `translate(${chatOffset.x}px, ${chatOffset.y}px)` }}>
           <div className="chat-popup-header" onPointerDown={handleDragStart} onPointerMove={handleDragMove} onPointerUp={handleDragEnd}>
@@ -645,7 +717,6 @@ function App() {
         </div>
       )}
 
-      {/* 우측 하단 플로팅 챗봇 아이콘 */}
       <button className="floating-btn" onClick={() => setIsChatOpen(!isChatOpen)}>
         <MessageSquare size={28} />
       </button>

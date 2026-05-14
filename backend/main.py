@@ -45,6 +45,13 @@ class RealEstateHistoryTable(Base):
     pdf_base64 = Column(Text)              
     created_at = Column(DateTime, default=datetime.now)
 
+# 🌟 티켓 기본값 0장으로 철벽 방어!
+class TicketTable(Base):
+    __tablename__ = "user_tickets"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, unique=True, index=True)
+    count = Column(Integer, default=0) 
+
 try:
     Base.metadata.create_all(bind=engine)
     print("✅ DB 연동 및 테이블 생성 성공")
@@ -152,6 +159,7 @@ class RealEstateRequest(BaseModel): user_id: str; addr_sido: str; addr_sigungu: 
 class EstateListRequest(BaseModel): addr_sido: str; addr_sigun: str; addr_dong: str
 class MarketPriceRequest(BaseModel): complex_no: str; search_gbn: str = "1"
 class ChatRequest(BaseModel): user_message: str; analysis_context: str
+class VerifyRequest(BaseModel): receipt_id: str; user_id: str
 
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -159,12 +167,10 @@ app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], all
 @app.get("/ping")
 async def ping(): return {"message": "pong"}
 
-# 🌟 아이디 중복 확인 엔드포인트
 @app.get("/check-id/{user_id}")
 async def check_id(user_id: str, db: Session = Depends(get_db)):
     existing = db.query(UserTable).filter(UserTable.user_id == user_id).first()
-    if existing:
-        return {"available": False}
+    if existing: return {"available": False}
     return {"available": True}
 
 @app.post("/register")
@@ -172,7 +178,13 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
     existing = db.query(UserTable).filter(UserTable.user_id == user_data.user_id).first()
     if existing: raise HTTPException(status_code=400, detail="이미 존재하는 아이디입니다.")
     new_user = UserTable(user_id=user_data.user_id, password=user_data.password, username=user_data.username or user_data.user_id)
-    db.add(new_user); db.commit(); return {"message": "가입 성공"}
+    db.add(new_user)
+    
+    # 🌟 신규 가입자에게 기본 0장의 티켓 지급 (바로 결제 유도)
+    new_ticket = TicketTable(user_id=user_data.user_id, count=0)
+    db.add(new_ticket)
+    db.commit()
+    return {"message": "가입 성공"}
 
 @app.post("/login")
 async def login(req: LoginRequest, db: Session = Depends(get_db)):
@@ -180,18 +192,46 @@ async def login(req: LoginRequest, db: Session = Depends(get_db)):
     if not user: raise HTTPException(status_code=401, detail="정보 불일치")
     return {"access_token": "valid"}
 
+@app.get("/user-info/{user_id}")
+async def get_user_info(user_id: str, db: Session = Depends(get_db)):
+    ticket_record = db.query(TicketTable).filter(TicketTable.user_id == user_id).first()
+    if not ticket_record:
+        # 기존에 가입한 사람들도 0장으로 시작!
+        ticket_record = TicketTable(user_id=user_id, count=0)
+        db.add(ticket_record); db.commit(); db.refresh(ticket_record)
+    return {"tickets": ticket_record.count}
+
+@app.post("/payment/verify")
+async def verify_payment(req: VerifyRequest, db: Session = Depends(get_db)):
+    ticket_record = db.query(TicketTable).filter(TicketTable.user_id == req.user_id).first()
+    if ticket_record:
+        ticket_record.count += 1
+        db.commit()
+        return {"success": True, "tickets": ticket_record.count}
+    raise HTTPException(status_code=400, detail="유저 정보를 찾을 수 없습니다.")
+
 @app.post("/fetch-real-estate")
 async def fetch_info(request: RealEstateRequest, db: Session = Depends(get_db)):
     codef_params = request.dict()
     user_id = codef_params.pop("user_id", None)
+    
+    ticket_record = db.query(TicketTable).filter(TicketTable.user_id == user_id).first()
+    if not ticket_record or ticket_record.count <= 0:
+        return {"error": "🎫 열람권이 부족합니다. 결제 후 충전해 주세요!"}
+
     res = codef.get_real_estate_register(codef_params)
-    if res.get("data"):
+    
+    if res.get("data") or (res.get("result") and res["result"].get("code") == "CF-00000"):
+        ticket_record.count -= 1
+        db.commit()
+        
         data_obj = res["data"][0] if isinstance(res["data"], list) else res["data"]
         pdf_data = data_obj.get("resOriGinalData") or data_obj.get("resoriGinalData")
         if pdf_data:
             full_addr = f"{request.addr_sido} {request.addr_roadName} {request.addr_buildingNumber} {request.dong} {request.ho}".strip()
             new_history = RealEstateHistoryTable(owner_id=user_id, address=full_addr, pdf_base64=pdf_data)
             db.add(new_history); db.commit()
+            
     return res
 
 @app.get("/real-estate-history/{user_id}")
@@ -206,7 +246,6 @@ async def fetch_estate_list(request: EstateListRequest):
 async def fetch_market_price(request: MarketPriceRequest):
     return codef.get_market_price(request.dict())
 
-# 🌟 계약서 분석 (이미지 화질 검사 프롬프트 추가)
 @app.post("/analyze")
 async def analyze_contract(file: UploadFile = File(...)):
     global current_key_index
@@ -216,7 +255,6 @@ async def analyze_contract(file: UploadFile = File(...)):
         contents = await file.read()
         image_part = types.Part.from_bytes(data=contents, mime_type=file.content_type)
         
-        # 🌟 새롭게 추가된 강력한 분석 명령어
         prompt = """귀하는 대한민국 부동산 법률 분석 AI입니다. 
         [중요 지시사항]
         1. 가장 먼저 업로드된 계약서 이미지의 화질과 가독성을 확인하세요.

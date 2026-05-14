@@ -152,11 +152,18 @@ function App() {
 
   useEffect(() => { document.documentElement.setAttribute('data-theme', theme); }, [theme]);
 
-  // 🌟 완벽하게 작동하는 부트페이 결제 로직
+  // 🌟 [핵심] 누락되었던 로그아웃 함수 부활! 🌟
+  const handleLogout = () => { 
+    localStorage.clear(); 
+    setIsLoggedIn(false); 
+    setCurrentView('home'); 
+    window.location.reload();
+  };
+
   const handlePayment = async () => {
     try {
       const response = await Bootpay.requestPayment({
-        "application_id": "Js-J8qI9S-hknFEl_Mf0Kw", // 승현님의 완벽한 키
+        "application_id": "Js-J8qI9S-hknFEl_Mf0Kw", 
         "price": 1000, 
         "order_name": "등기부등본 열람권 1회 충전", 
         "order_id": `ORD_${Date.now()}`,
@@ -383,7 +390,6 @@ function App() {
               <div style={{ maxWidth: '800px', margin: '0 auto', marginTop: '20px' }}>
                 <section className="card" style={{ padding: '30px' }}>
                   
-                  {/* 🌟 예쁘게 복구된 티켓 & 충전 배너 🌟 */}
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '30px', padding: '20px', background: 'var(--bg-main)', borderRadius: '15px', border: '2px solid var(--accent)', boxShadow: '0 4px 15px rgba(26, 115, 232, 0.1)' }}>
                     <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--text)' }}>
                       🎫 보유 열람권: <span style={{ color: 'var(--accent)', fontSize: '1.6rem', marginLeft: '10px' }}>{tickets}</span>장

@@ -49,11 +49,10 @@ class TicketTable(Base):
     __tablename__ = "user_tickets"
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(String, unique=True, index=True)
-    count = Column(Integer, default=0) # 0장 지급
+    count = Column(Integer, default=0)
 
 try:
     Base.metadata.create_all(bind=engine)
-    print("✅ DB 연동 및 테이블 생성 성공")
 except Exception as e:
     print(f"❌ DB 연동 실패: {str(e)}")
 
@@ -65,7 +64,7 @@ def get_db():
         db.close()
 
 # ==========================================
-# 🌟 2. CODEF API 서비스
+# 🌟 2. CODEF API 서비스 (동/호수 조회 추가)
 # ==========================================
 class CodefService:
     def __init__(self):
@@ -133,7 +132,14 @@ class CodefService:
         if not token: return {"error": "CODEF 토큰 발급 실패"}
         url = f"{self.base_url}/kr/public/lt/real-estate-board/market-price-information"
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-        payload = {"organization": "0011", "searchGbn": params.get("search_gbn", "1"), "complexNo": params.get("complex_no")}
+        # 🌟 동, 호 파라미터 반영 및 searchGbn 처리
+        payload = {
+            "organization": "0011", 
+            "searchGbn": params.get("search_gbn", "1"), 
+            "complexNo": params.get("complex_no"),
+            "dong": params.get("dong", ""),
+            "ho": params.get("ho", "")
+        }
         try:
             response = requests.post(url, headers=headers, json=payload)
             return json.loads(urllib.parse.unquote(response.text))
@@ -155,7 +161,8 @@ class UserRegister(BaseModel): user_id: str; password: str; username: str = None
 class LoginRequest(BaseModel): user_id: str; password: str
 class RealEstateRequest(BaseModel): user_id: str; addr_sido: str; addr_sigungu: str; addr_roadName: str = ""; addr_buildingNumber: str = ""; dong: str = ""; ho: str = ""; realtyType: str = "1" 
 class EstateListRequest(BaseModel): addr_sido: str; addr_sigun: str; addr_dong: str
-class MarketPriceRequest(BaseModel): complex_no: str; search_gbn: str = "1"
+# 🌟 동/호 파라미터 추가
+class MarketPriceRequest(BaseModel): complex_no: str; search_gbn: str = "1"; dong: str = ""; ho: str = ""
 class ChatRequest(BaseModel): user_message: str; analysis_context: str
 class VerifyRequest(BaseModel): receipt_id: str; user_id: str
 

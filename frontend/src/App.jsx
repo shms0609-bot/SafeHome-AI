@@ -130,6 +130,11 @@ function App() {
   const [searchSido, setSearchSido] = useState("");
   const [searchSigun, setSearchSigun] = useState("");
   const [searchDong, setSearchDong] = useState("");
+  
+  // 🌟 시세조회 동/호 상태 추가
+  const [marketDong, setMarketDong] = useState("");
+  const [marketHo, setMarketHo] = useState("");
+  
   const [estateList, setEstateList] = useState([]);
   const [estateLoading, setEstateLoading] = useState(false);
   const [marketResult, setMarketResult] = useState(null);
@@ -152,7 +157,6 @@ function App() {
 
   useEffect(() => { document.documentElement.setAttribute('data-theme', theme); }, [theme]);
 
-  // 🌟 [핵심] 누락되었던 로그아웃 함수 부활! 🌟
   const handleLogout = () => { 
     localStorage.clear(); 
     setIsLoggedIn(false); 
@@ -164,12 +168,8 @@ function App() {
     try {
       const response = await Bootpay.requestPayment({
         "application_id": "6a05f83163e23a6f9b6085a1", 
-        "price": 1000, 
-        "order_name": "등기부등본 열람권 1회 충전", 
-        "order_id": `ORD_${Date.now()}`,
-        "pg": "kcp", 
-        "method": "card", 
-        "user": { "id": userId },
+        "price": 1000, "order_name": "열람권 충전", "order_id": `ORD_${Date.now()}`,
+        "pg": "kcp", "method": "card", "user": { "id": userId },
         "extra": { "open_type": "iframe" }
       });
       if (response.event === 'done') {
@@ -179,10 +179,7 @@ function App() {
         });
         const data = await res.json(); setTickets(data.tickets); alert("충전 완료! 🎫");
       }
-    } catch (e) { 
-      if(e.event === 'cancel') { console.log("결제 취소"); } 
-      else { alert("결제창 호출 오류: " + e.message); }
-    }
+    } catch { alert("결제창 호출 실패"); }
   };
 
   const navTo = (v) => { setCurrentView(v); setIsMobileMenuOpen(false); };
@@ -283,11 +280,33 @@ function App() {
     } catch { alert("단지 검색 실패!"); } finally { setEstateLoading(false); }
   };
 
+  // 🌟 동/호 파라미터를 추가하여 시세 조회 API 요청
   const handleFetchMarketPrice = async (complexNo) => {
     setMarketLoading(true); setMarketResult(null);
+    
+    // 입력값에서 '동', '호' 글자가 포함되어 있으면 제거
+    const cleanDong = marketDong.replace(/동$/, '').trim();
+    const cleanHo = marketHo.replace(/호$/, '').trim();
+    const searchGbn = (cleanDong && cleanHo) ? "2" : "1"; // 동,호 입력 시 호별 시세(2), 없으면 단지 평균(1)
+
     try {
-      const res = await fetch(`${API_BASE_URL}/fetch-market-price`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ complex_no: complexNo }) });
-      const data = await res.json(); setMarketResult(data); setTimeout(() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }), 100);
+      const res = await fetch(`${API_BASE_URL}/fetch-market-price`, { 
+        method: 'POST', 
+        headers: { 'Content-Type': 'application/json' }, 
+        body: JSON.stringify({ 
+          complex_no: complexNo, 
+          search_gbn: searchGbn, 
+          dong: cleanDong, 
+          ho: cleanHo 
+        }) 
+      });
+      const data = await res.json(); 
+      if(data.result && data.result.code !== "CF-00000" && !data.data) {
+        alert("해당 동/호수에 대한 시세 정보가 없거나 오류가 발생했습니다: " + data.result.message);
+      } else {
+        setMarketResult(data); 
+        setTimeout(() => window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' }), 100);
+      }
     } catch { alert("시세 조회 실패!"); } finally { setMarketLoading(false); }
   };
 
@@ -451,7 +470,7 @@ function App() {
                       <button onClick={() => downloadSavedPDF(item.pdf_base64, item.address)} className="main-btn" style={{ margin: 0, padding: '10px 20px' }}>열람 / 다운로드</button>
                     </div>
                   )) : (
-                    <div style={{ textAlign: 'center', padding: '50px', color: '#888', background: 'var(--card-bg)', borderRadius: '15px' }}>아직 발급받은 등기부가 없습니다.</div>
+                    <div style={{ textAlign: 'center', padding: '50px', color: '#888', background: 'var(--card-bg)', borderRadius: '15px', border: '1px solid var(--border)' }}>아직 발급받은 등기부가 없습니다.</div>
                   )}
                 </div>
               </div>
@@ -552,12 +571,22 @@ function App() {
               <button className="back-btn" onClick={() => navTo('home')}><ArrowLeft size={20}/> 뒤로가기</button>
               <div style={{ maxWidth: '800px', margin: '0 auto', marginTop: '20px' }}>
                 <section className="card" style={{ padding: '30px' }}>
-                  <h3 className="card-title" style={{ color: 'var(--accent)', marginBottom: '30px' }}><TrendingUp /> 아파트 시세 조회</h3>
+                  <h3 className="card-title" style={{ color: 'var(--accent)', marginBottom: '30px' }}><TrendingUp /> 아파트 시세 상세 조회</h3>
+                  
+                  {/* 🌟 동/호수 입력 UI 추가 🌟 */}
                   <div className="input-group">
-                    <input placeholder="시/도 (예: 서울특별시)" value={searchSido} onChange={(e) => setSearchSido(e.target.value)} className="flex-input" />
-                    <input placeholder="시/군/구 (예: 송파구)" value={searchSigun} onChange={(e) => setSearchSigun(e.target.value)} className="flex-input" />
-                    <input placeholder="읍/면/동 (예: 장지동)" value={searchDong} onChange={(e) => setSearchDong(e.target.value)} className="flex-input" />
+                    <input placeholder="시/도 (예: 부산광역시)" value={searchSido} onChange={(e) => setSearchSido(e.target.value)} className="flex-input" />
+                    <input placeholder="시/군/구 (예: 진구)" value={searchSigun} onChange={(e) => setSearchSigun(e.target.value)} className="flex-input" />
+                    <input placeholder="읍/면/동 (예: 가야동)" value={searchDong} onChange={(e) => setSearchDong(e.target.value)} className="flex-input" />
                   </div>
+                  <div className="input-group" style={{ marginTop: '10px' }}>
+                    <input placeholder="동 입력 (예: 101) - 선택" value={marketDong} onChange={(e) => setMarketDong(e.target.value)} className="flex-input" style={{ background: '#f8f9fa' }} />
+                    <input placeholder="호수 입력 (예: 202) - 선택" value={marketHo} onChange={(e) => setMarketHo(e.target.value)} className="flex-input" style={{ background: '#f8f9fa' }} />
+                  </div>
+                  <p style={{ fontSize: '0.85rem', color: '#888', marginTop: '15px', lineHeight: '1.5' }}>
+                    💡 <strong>꿀팁:</strong> 동과 호수를 모두 입력하면 해당 세대의 맞춤형 시세가, 비워두면 단지 전체의 평균 시세가 조회됩니다.
+                  </p>
+                  
                   <button onClick={handleSearchEstates} disabled={estateLoading} className="main-btn" style={{ width: '100%', marginBottom: '30px', marginTop: '15px' }}>
                     {estateLoading ? "단지 목록을 찾는 중..." : "해당 지역 단지 검색하기"}
                   </button>
@@ -595,25 +624,52 @@ function App() {
                         </div>
                       </div>
                       
+                      {/* 🌟 동/호수 데이터가 있을 경우와 단지 평균가일 경우를 나눠서 렌더링 🌟 */}
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                        {marketResult.data.resAreaPriceList && marketResult.data.resAreaPriceList.map((priceInfo, idx) => (
-                          <div key={idx} className="price-card">
-                            <div style={{ flex: 1, marginBottom: '10px' }}>
-                              <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--text)', marginBottom: '5px' }}>{priceInfo.resArea} ㎡</div>
-                              <div style={{ fontSize: '0.9rem', color: '#888' }}>세대수: {priceInfo.resCompositionCnt}세대</div>
+                        {marketResult.data.resHoPriceList && marketResult.data.resHoPriceList.length > 0 ? (
+                          <>
+                            <div style={{ background: '#e3f2fd', color: '#1976d2', padding: '15px', borderRadius: '10px', textAlign: 'center', fontWeight: 'bold', fontSize: '1.1rem', border: '1px solid #90caf9' }}>
+                              🎯 선택하신 {marketDong}동 {marketHo}호 상세 시세입니다!
                             </div>
-                            <div className="price-details">
-                              <div style={{ textAlign: 'right' }}>
-                                <span style={{ fontSize: '0.85rem', color: '#888', display: 'block' }}>매매 평균가</span>
-                                <strong style={{ fontSize: '1.2rem', color: '#d32f2f' }}>{formatKoreanPrice(priceInfo.resTopAveragePrice)}</strong>
+                            {marketResult.data.resHoPriceList.map((hoInfo, idx) => (
+                              <div key={idx} className="price-card">
+                                <div style={{ flex: 1, marginBottom: '10px' }}>
+                                  <div style={{ fontSize: '1.3rem', fontWeight: 'bold', color: 'var(--text)', marginBottom: '5px' }}>{hoInfo.resArea} ㎡</div>
+                                  <div style={{ fontSize: '0.9rem', color: '#888' }}>해당 면적 세대수: {hoInfo.resCompositionCnt}세대</div>
+                                </div>
+                                <div className="price-details">
+                                  <div style={{ textAlign: 'right' }}>
+                                    <span style={{ fontSize: '0.85rem', color: '#888', display: 'block' }}>매매 상하한가</span>
+                                    <strong style={{ fontSize: '1.2rem', color: '#d32f2f' }}>{formatKoreanPrice(hoInfo.resLowestPrice)} ~ {formatKoreanPrice(hoInfo.resTopPrice)}</strong>
+                                  </div>
+                                  <div style={{ textAlign: 'right' }}>
+                                    <span style={{ fontSize: '0.85rem', color: '#888', display: 'block' }}>전세 상하한가</span>
+                                    <strong style={{ fontSize: '1.2rem', color: '#1976d2' }}>{formatKoreanPrice(hoInfo.resLowestPrice1)} ~ {formatKoreanPrice(hoInfo.resTopPrice1)}</strong>
+                                  </div>
+                                </div>
                               </div>
-                              <div style={{ textAlign: 'right' }}>
-                                <span style={{ fontSize: '0.85rem', color: '#888', display: 'block' }}>전세 평균가</span>
-                                <strong style={{ fontSize: '1.2rem', color: '#1976d2' }}>{formatKoreanPrice(priceInfo.resTopAveragePrice1)}</strong>
+                            ))}
+                          </>
+                        ) : (
+                          marketResult.data.resAreaPriceList && marketResult.data.resAreaPriceList.map((priceInfo, idx) => (
+                            <div key={idx} className="price-card">
+                              <div style={{ flex: 1, marginBottom: '10px' }}>
+                                <div style={{ fontSize: '1.2rem', fontWeight: 'bold', color: 'var(--text)', marginBottom: '5px' }}>{priceInfo.resArea} ㎡</div>
+                                <div style={{ fontSize: '0.9rem', color: '#888' }}>세대수: {priceInfo.resCompositionCnt}세대</div>
+                              </div>
+                              <div className="price-details">
+                                <div style={{ textAlign: 'right' }}>
+                                  <span style={{ fontSize: '0.85rem', color: '#888', display: 'block' }}>매매 평균가</span>
+                                  <strong style={{ fontSize: '1.2rem', color: '#d32f2f' }}>{formatKoreanPrice(priceInfo.resTopAveragePrice)}</strong>
+                                </div>
+                                <div style={{ textAlign: 'right' }}>
+                                  <span style={{ fontSize: '0.85rem', color: '#888', display: 'block' }}>전세 평균가</span>
+                                  <strong style={{ fontSize: '1.2rem', color: '#1976d2' }}>{formatKoreanPrice(priceInfo.resTopAveragePrice1)}</strong>
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        ))}
+                          ))
+                        )}
                       </div>
                     </div>
                   )}

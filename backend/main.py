@@ -45,12 +45,11 @@ class RealEstateHistoryTable(Base):
     pdf_base64 = Column(Text)              
     created_at = Column(DateTime, default=datetime.now)
 
-# 🌟 티켓 기본값 0장으로 철벽 방어!
 class TicketTable(Base):
     __tablename__ = "user_tickets"
     id = Column(Integer, primary_key=True, index=True)
     user_id = Column(String, unique=True, index=True)
-    count = Column(Integer, default=0) 
+    count = Column(Integer, default=0) # 0장 지급
 
 try:
     Base.metadata.create_all(bind=engine)
@@ -66,7 +65,7 @@ def get_db():
         db.close()
 
 # ==========================================
-# 🌟 2. CODEF API 서비스 (등기부 & 시세)
+# 🌟 2. CODEF API 서비스
 # ==========================================
 class CodefService:
     def __init__(self):
@@ -105,7 +104,6 @@ class CodefService:
         e_prepay_no = os.getenv("E_PREPAY_NO", "H82003788709").replace("-", "").strip().strip('"').strip("'")
         raw_e_prepay_pass = os.getenv("E_PREPAY_PASS", "smsh1602").strip().strip('"').strip("'")
         encrypted_e_prepay_pass = self.encrypt_rsa(raw_e_prepay_pass)
-        if not e_prepay_no: return {"error": "캐시 번호가 누락되었습니다."}
         url = f"{self.base_url}/kr/public/ck/real-estate-register/status" 
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
         payload = {
@@ -170,8 +168,7 @@ async def ping(): return {"message": "pong"}
 @app.get("/check-id/{user_id}")
 async def check_id(user_id: str, db: Session = Depends(get_db)):
     existing = db.query(UserTable).filter(UserTable.user_id == user_id).first()
-    if existing: return {"available": False}
-    return {"available": True}
+    return {"available": existing is None}
 
 @app.post("/register")
 async def register(user_data: UserRegister, db: Session = Depends(get_db)):
@@ -179,8 +176,6 @@ async def register(user_data: UserRegister, db: Session = Depends(get_db)):
     if existing: raise HTTPException(status_code=400, detail="이미 존재하는 아이디입니다.")
     new_user = UserTable(user_id=user_data.user_id, password=user_data.password, username=user_data.username or user_data.user_id)
     db.add(new_user)
-    
-    # 🌟 신규 가입자에게 기본 0장의 티켓 지급 (바로 결제 유도)
     new_ticket = TicketTable(user_id=user_data.user_id, count=0)
     db.add(new_ticket)
     db.commit()
@@ -196,7 +191,6 @@ async def login(req: LoginRequest, db: Session = Depends(get_db)):
 async def get_user_info(user_id: str, db: Session = Depends(get_db)):
     ticket_record = db.query(TicketTable).filter(TicketTable.user_id == user_id).first()
     if not ticket_record:
-        # 기존에 가입한 사람들도 0장으로 시작!
         ticket_record = TicketTable(user_id=user_id, count=0)
         db.add(ticket_record); db.commit(); db.refresh(ticket_record)
     return {"tickets": ticket_record.count}
@@ -214,24 +208,20 @@ async def verify_payment(req: VerifyRequest, db: Session = Depends(get_db)):
 async def fetch_info(request: RealEstateRequest, db: Session = Depends(get_db)):
     codef_params = request.dict()
     user_id = codef_params.pop("user_id", None)
-    
     ticket_record = db.query(TicketTable).filter(TicketTable.user_id == user_id).first()
     if not ticket_record or ticket_record.count <= 0:
         return {"error": "🎫 열람권이 부족합니다. 결제 후 충전해 주세요!"}
 
     res = codef.get_real_estate_register(codef_params)
-    
     if res.get("data") or (res.get("result") and res["result"].get("code") == "CF-00000"):
         ticket_record.count -= 1
         db.commit()
-        
         data_obj = res["data"][0] if isinstance(res["data"], list) else res["data"]
         pdf_data = data_obj.get("resOriGinalData") or data_obj.get("resoriGinalData")
         if pdf_data:
             full_addr = f"{request.addr_sido} {request.addr_roadName} {request.addr_buildingNumber} {request.dong} {request.ho}".strip()
             new_history = RealEstateHistoryTable(owner_id=user_id, address=full_addr, pdf_base64=pdf_data)
             db.add(new_history); db.commit()
-            
     return res
 
 @app.get("/real-estate-history/{user_id}")
@@ -249,18 +239,12 @@ async def fetch_market_price(request: MarketPriceRequest):
 @app.post("/analyze")
 async def analyze_contract(file: UploadFile = File(...)):
     global current_key_index
-    if not api_keys_list: raise HTTPException(status_code=500, detail="Gemini API 키가 서버에 설정되지 않았습니다.")
-    
     try:
         contents = await file.read()
         image_part = types.Part.from_bytes(data=contents, mime_type=file.content_type)
-        
         prompt = """귀하는 대한민국 부동산 법률 분석 AI입니다. 
-        [중요 지시사항]
-        1. 가장 먼저 업로드된 계약서 이미지의 화질과 가독성을 확인하세요.
-        2. 글자가 너무 흐릿하거나, 빛 반사가 심하거나, 일부가 잘려 있어서 핵심 내용을 판독하기 어렵다면 분석을 중단하고 다음 문구만 출력하세요:
-        "⚠️ **이미지 판독 불가**\n\n계약서의 글자가 흐릿하거나 잘려서 정확한 권리 분석이 어렵습니다. 더 선명하게 문서 전체가 잘 보이는 사진으로 다시 업로드해 주세요."
-        3. 판독이 충분히 가능하다면, 계약서 이미지를 정밀 분석하여 위험도를 평가하고 상세한 마크다운 리포트를 작성하세요."""
+        1. 이미지의 화질을 확인하세요. 판독이 불가능하면 다음 문구만 출력하세요: "⚠️ **이미지 판독 불가**\n\n더 선명한 사진으로 다시 업로드해 주세요."
+        2. 판독이 가능하면 위험도를 평가하고 상세 마크다운 리포트를 작성하세요."""
         
         attempts = 0
         while attempts < len(api_keys_list):
@@ -269,46 +253,24 @@ async def analyze_contract(file: UploadFile = File(...)):
                 response = client.models.generate_content(model="gemini-2.5-flash", contents=[prompt, image_part])
                 return {"analysis": response.text}
             except Exception as e:
-                error_msg = str(e).lower()
-                print(f"\n🚨 [디버깅] {current_key_index + 1}번째 키에서 에러 발생: {str(e)}\n")
-                if "429" in error_msg or "quota" in error_msg or "exhausted" in error_msg:
-                    print(f"⚠️ {current_key_index + 1}번째 키 한도 초과! 다음 키로 교체합니다...")
-                    current_key_index = (current_key_index + 1) % len(api_keys_list)
-                    attempts += 1
-                else:
-                    raise HTTPException(status_code=500, detail=str(e))
-        raise HTTPException(status_code=429, detail="등록된 모든 API 키의 일일 한도가 초과되었습니다.")
-    except Exception as e:
-        if isinstance(e, HTTPException): raise e
-        raise HTTPException(status_code=500, detail=str(e))
+                current_key_index = (current_key_index + 1) % len(api_keys_list)
+                attempts += 1
+        raise HTTPException(status_code=429, detail="한도 초과")
+    except Exception as e: raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/chat")
 async def chat_with_ai(request: ChatRequest):
     global current_key_index
-    if not api_keys_list: raise HTTPException(status_code=500, detail="Gemini API 키가 서버에 설정되지 않았습니다.")
-    
     try:
         sys_instruct = f"당신은 SafeHome AI 임대차 분쟁 전문가입니다. 다음 분석 결과를 바탕으로 상담하세요: {request.analysis_context}"
         attempts = 0
         while attempts < len(api_keys_list):
             try:
                 client = Client(api_key=api_keys_list[current_key_index])
-                response = client.models.generate_content(
-                    model="gemini-2.5-flash", 
-                    contents=request.user_message,
-                    config=types.GenerateContentConfig(system_instruction=sys_instruct, max_output_tokens=2048, temperature=0.7)
-                )
+                response = client.models.generate_content(model="gemini-2.5-flash", contents=request.user_message, config=types.GenerateContentConfig(system_instruction=sys_instruct))
                 return {"reply": response.text}
-            except Exception as e:
-                error_msg = str(e).lower()
-                print(f"\n🚨 [디버깅] {current_key_index + 1}번째 키에서 에러 발생: {str(e)}\n")
-                if "429" in error_msg or "quota" in error_msg or "exhausted" in error_msg:
-                    print(f"⚠️ {current_key_index + 1}번째 키 한도 초과! 다음 키로 교체합니다...")
-                    current_key_index = (current_key_index + 1) % len(api_keys_list)
-                    attempts += 1
-                else:
-                    raise HTTPException(status_code=500, detail=str(e))
-        raise HTTPException(status_code=429, detail="등록된 모든 API 키의 일일 한도가 초과되었습니다.")
-    except Exception as e:
-        if isinstance(e, HTTPException): raise e
-        raise HTTPException(status_code=500, detail=str(e))
+            except:
+                current_key_index = (current_key_index + 1) % len(api_keys_list)
+                attempts += 1
+        raise HTTPException(status_code=429, detail="한도 초과")
+    except Exception as e: raise HTTPException(status_code=500, detail=str(e))

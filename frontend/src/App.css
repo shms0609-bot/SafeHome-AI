@@ -304,3 +304,183 @@ body { margin: 0; background: var(--bg-main); overflow-x: hidden; }
   box-shadow: 0 4px 12px rgba(0,0,0,0.1);
   transform: translateY(-2px);
 }
+/* ==========================================
+   🌟 반응형 웹 & UI 개선 스타일 (모바일 최적화) 
+   ========================================== */
+
+/* 상단 모바일 햄버거 헤더 (PC에서는 숨김) */
+.mobile-header {
+  display: none;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 20px;
+  background: var(--bg-main);
+  border-bottom: 1px solid var(--border);
+  z-index: 1000;
+}
+
+/* 챗봇 & 채팅 버블 공통 스타일 */
+.chat-bubble {
+  padding: 15px 20px;
+  border-radius: 15px;
+  line-height: 1.6;
+  max-width: 80%;
+  font-size: 1rem;
+}
+.chat-bubble.user {
+  background: #f0f4f9;
+  color: #111;
+  border: none;
+}
+[data-theme='dark'] .chat-bubble.user {
+  background: #3c4043;
+  color: #e8eaed;
+}
+.chat-bubble.ai {
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  color: var(--text);
+}
+.chat-bubble.small {
+  padding: 12px 15px;
+  font-size: 0.95rem;
+}
+.ai-icon {
+  width: 40px; height: 40px;
+  border-radius: 50%;
+  background: var(--accent);
+  display: flex; align-items: center; justify-content: center;
+  color: #fff; flex-shrink: 0;
+}
+.ai-icon.small { width: 35px; height: 35px; }
+
+/* 챗봇 입력창 공통 */
+.chat-input-container {
+  display: flex;
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  borderRadius: 30px;
+  padding: 10px 20px;
+  align-items: center;
+}
+.chat-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-size: 1rem;
+  padding: 10px;
+}
+.chat-send-btn {
+  background: var(--accent);
+  border: none;
+  cursor: pointer;
+  color: #fff;
+  width: 45px; height: 45px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* 버튼 및 메뉴 아이템 */
+.icon-btn, .icon-btn-white {
+  background: transparent; border: none; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+}
+.icon-btn { color: var(--text); }
+.icon-btn-white { color: #fff; }
+
+.menu-item {
+  padding: 12px 15px;
+  border-radius: 10px;
+  cursor: pointer;
+  display: flex; align-items: center; gap: 12px;
+  font-size: 0.95rem;
+  transition: background 0.2s;
+}
+.menu-item.active { background: var(--card-bg); }
+.menu-item:hover { background: var(--card-bg); }
+.menu-item.borderless { text-align: left; width: 100%; color: var(--text); }
+
+/* 시세 조회 결과 레이아웃 */
+.market-header {
+  display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 20px;
+}
+.type-badge {
+  background: var(--accent); color: #fff; padding: 5px 10px; border-radius: 5px; font-size: 0.8rem; font-weight: bold; margin-bottom: 10px; display: inline-block;
+}
+.price-card {
+  background: var(--bg-main); border: 1px solid var(--border); border-radius: 10px; padding: 20px; display: flex; justify-content: space-between; align-items: center;
+}
+.price-details { display: flex; gap: 20px; justify-content: flex-end; }
+.outline-btn { background: none; border: 1px solid var(--border); padding: 5px 15px; border-radius: 5px; cursor: pointer; color: var(--text); }
+
+/* 🌟 드래그 & 크기 조절 완벽 적용된 팝업 챗봇 */
+.chat-popup {
+  position: fixed;
+  right: 30px; bottom: 100px;
+  width: 380px; height: 550px;
+  min-width: 300px; min-height: 400px;
+  background: var(--bg-main);
+  border: 1px solid var(--border);
+  border-radius: 15px;
+  box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+  display: flex; flex-direction: column;
+  z-index: 9999;
+  resize: both; /* 크기 조절 핵심 */
+  overflow: hidden;
+  padding-bottom: 15px; /* 리사이즈 손잡이가 입력창에 안 가려지도록 하단 여백 추가! */
+}
+.chat-popup-header {
+  padding: 15px;
+  background: var(--accent);
+  color: #fff;
+  display: flex; justify-content: space-between; align-items: center;
+  user-select: none; touch-action: none;
+}
+.floating-btn {
+  position: fixed; right: 30px; bottom: 30px;
+  width: 60px; height: 60px; border-radius: 50%;
+  background: var(--accent); color: #fff; border: none;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; box-shadow: 0 4px 15px rgba(0,0,0,0.2); z-index: 9998;
+}
+
+/* 🌟 768px 이하 모바일 화면 적응형 (Media Queries) 🌟 */
+@media (max-width: 768px) {
+  .mobile-header { display: flex; }
+  .sidebar-logo { display: none !important; }
+  
+  /* 사이드바를 화면 왼쪽 바깥으로 숨김 */
+  .sidebar {
+    position: fixed; left: -100%; top: 60px;
+    height: calc(100vh - 60px); width: 260px;
+    background: var(--bg-main);
+    z-index: 999; transition: left 0.3s ease;
+    border-right: 1px solid var(--border);
+  }
+  .sidebar.open { left: 0; }
+  
+  .main-content { flex: 1; overflow-y: auto; }
+  .responsive-title { font-size: 1.8rem !important; margin-bottom: 30px !important; }
+  
+  /* 서비스 카드와 인풋들을 세로 1줄로 변경 */
+  .service-grid { grid-template-columns: 1fr !important; }
+  .wide-card { grid-column: span 1 !important; }
+  .input-group { flex-direction: column; gap: 10px !important; }
+  .flex-input { width: 100% !important; margin-bottom: 0 !important; }
+  
+  /* 시세 카드 세로 정렬 */
+  .market-header { flex-direction: column; align-items: flex-start; gap: 10px; }
+  .price-card { flex-direction: column; align-items: flex-start; gap: 15px; }
+  .price-details { justify-content: flex-start; width: 100%; border-top: 1px dashed var(--border); padding-top: 15px; }
+  
+  /* 모바일에서 팝업 챗봇은 화면을 거의 꽉 채우게 (리사이즈/드래그 무효화) */
+  .chat-popup {
+    width: 95vw !important; height: 80vh !important;
+    right: 2.5vw !important; bottom: 100px !important;
+    transform: none !important; resize: none; padding-bottom: 0;
+  }
+  .chat-popup-header { cursor: default !important; }
+  .floating-btn { right: 20px; bottom: 20px; }
+}

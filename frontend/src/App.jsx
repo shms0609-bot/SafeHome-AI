@@ -19,26 +19,22 @@ const formatKoreanPrice = (priceStr) => {
   return `${man.toLocaleString()}만원`;
 };
 
-// 🌟 로그인 & 회원가입 창 UI 대폭 개선
 function Login({ onLoginSuccess }) {
   const [isRegisterMode, setIsRegisterMode] = useState(false);
   const [id, setId] = useState("");
   const [pw, setPw] = useState("");
-  const [pwConfirm, setPwConfirm] = useState(""); // 비밀번호 확인용 State
+  const [pwConfirm, setPwConfirm] = useState(""); 
   const [name, setName] = useState("");
   
-  // 🌟 중복 확인 관련 State
   const [isIdChecked, setIsIdChecked] = useState(false);
   const [isIdAvailable, setIsIdAvailable] = useState(false);
 
-  // 아이디 입력값이 바뀌면 중복확인 통과 기록을 다시 초기화합니다.
   const handleIdChange = (e) => {
     setId(e.target.value);
     setIsIdChecked(false);
     setIsIdAvailable(false);
   };
 
-  // 🌟 아이디 중복 확인 함수
   const handleCheckId = async () => {
     if (!id.trim()) return alert("아이디를 먼저 입력해주세요.");
     try {
@@ -62,7 +58,6 @@ function Login({ onLoginSuccess }) {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    // 🌟 회원가입 모드일 때 추가 검증 로직 작동
     if (isRegisterMode) {
       if (!isIdChecked || !isIdAvailable) {
         return alert("아이디 중복 확인을 먼저 완료해주세요.");
@@ -110,12 +105,9 @@ function Login({ onLoginSuccess }) {
           <ShieldCheck size={32} /> {isRegisterMode ? "회원가입" : "로그인"}
         </h2>
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-          
           {isRegisterMode && (
             <input type="text" placeholder="이름 (닉네임)" value={name} onChange={(e) => setName(e.target.value)} style={{ padding: '15px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-main)', color: 'var(--text)' }} required />
           )}
-          
-          {/* 🌟 아이디 입력 및 중복확인 버튼 영역 */}
           <div style={{ display: 'flex', gap: '10px' }}>
             <input type="text" placeholder="아이디" value={id} onChange={handleIdChange} style={{ flex: 1, padding: '15px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-main)', color: 'var(--text)' }} required />
             {isRegisterMode && (
@@ -124,19 +116,13 @@ function Login({ onLoginSuccess }) {
               </button>
             )}
           </div>
-
           <input type="password" placeholder="비밀번호" value={pw} onChange={(e) => setPw(e.target.value)} style={{ padding: '15px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-main)', color: 'var(--text)' }} required />
-          
-          {/* 🌟 비밀번호 확인 입력 영역 */}
           {isRegisterMode && (
             <input type="password" placeholder="비밀번호 확인" value={pwConfirm} onChange={(e) => setPwConfirm(e.target.value)} style={{ padding: '15px', borderRadius: '12px', border: `1px solid ${pwConfirm && pw !== pwConfirm ? '#f44336' : 'var(--border)'}`, background: 'var(--bg-main)', color: 'var(--text)' }} required />
           )}
-          
-          {/* 비밀번호 불일치 경고 메시지 */}
           {isRegisterMode && pwConfirm && pw !== pwConfirm && (
             <span style={{ color: '#f44336', fontSize: '0.85rem', marginTop: '-10px', marginLeft: '5px' }}>비밀번호가 일치하지 않습니다.</span>
           )}
-
           <button type="submit" className="main-btn" style={{ padding: '15px', marginTop: '10px' }}>{isRegisterMode ? "가입하기" : "로그인"}</button>
         </form>
         <button type="button" onClick={() => { setIsRegisterMode(!isRegisterMode); setId(""); setPw(""); setPwConfirm(""); setIsIdChecked(false); setIsIdAvailable(false); }} style={{ marginTop: '20px', background: 'none', border: 'none', color: 'var(--accent)', cursor: 'pointer', textDecoration: 'underline', width: '100%' }}>
@@ -156,9 +142,16 @@ function App() {
   const [analysis, setAnalysis] = useState("");
   const [loading, setLoading] = useState(false);
   
+  // 🌟 챗봇 팝업 제어 State
+  const [isChatOpen, setIsChatOpen] = useState(false);
   const [chatLoading, setChatLoading] = useState(false);
   const [chatInput, setChatInput] = useState("");
   const [messages, setMessages] = useState([]);
+
+  // 🌟 챗봇 드래그 위치 제어 State
+  const [chatOffset, setChatOffset] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragStart = useRef({ x: 0, y: 0 });
 
   const [isPostcodeOpen, setIsPostcodeOpen] = useState(false);
   const [selectedAddress, setSelectedAddress] = useState(""); 
@@ -181,7 +174,7 @@ function App() {
   const [marketResult, setMarketResult] = useState(null);
   const [marketLoading, setMarketLoading] = useState(false);
 
-  const scrollRef = useRef(null);
+  const chatScrollRef = useRef(null);
 
   useEffect(() => {
     const token = localStorage.getItem('accessToken');
@@ -199,7 +192,7 @@ function App() {
   };
 
   useEffect(() => { document.documentElement.setAttribute('data-theme', theme); }, [theme]);
-  useEffect(() => { if (scrollRef.current) scrollRef.current.scrollTop = scrollRef.current.scrollHeight; }, [messages, chatLoading, analysis, currentView]);
+  useEffect(() => { if (chatScrollRef.current) chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight; }, [messages, chatLoading, isChatOpen]);
 
   const fetchRegHistory = async () => {
     if (!userId) return;
@@ -228,13 +221,14 @@ function App() {
   const handleAnalyze = async () => {
     if (!file) return alert("파일을 선택하세요.");
     setLoading(true); setAnalysis(""); setMessages([]); 
-    setCurrentView('history'); 
     const formData = new FormData(); formData.append('file', file);
     try {
       const res = await fetch(`${API_BASE_URL}/analyze`, { method: 'POST', body: formData });
       const data = await res.json();
-      if (res.ok) setAnalysis(data.analysis);
-      else throw new Error(data.detail);
+      if (res.ok) {
+        setAnalysis(data.analysis);
+        setIsChatOpen(true); // 🌟 분석 완료 시 챗봇 자동 오픈
+      } else throw new Error(data.detail);
     } catch (err) { alert("분석 실패: " + err.message); } finally { setLoading(false); }
   };
 
@@ -251,6 +245,24 @@ function App() {
       const data = await res.json();
       setMessages([...newMsgs, { role: 'ai', text: data.reply }]);
     } catch (err) { alert("채팅 실패!"); } finally { setChatLoading(false); }
+  };
+
+  // 🌟 팝업 드래그 이벤트 핸들러
+  const handleDragStart = (e) => {
+    setIsDragging(true);
+    dragStart.current = { x: e.clientX - chatOffset.x, y: e.clientY - chatOffset.y };
+    e.target.setPointerCapture(e.pointerId); // 마우스가 밖으로 나가도 드래그 유지
+  };
+
+  const handleDragMove = (e) => {
+    if (isDragging) {
+      setChatOffset({ x: e.clientX - dragStart.current.x, y: e.clientY - dragStart.current.y });
+    }
+  };
+
+  const handleDragEnd = (e) => {
+    setIsDragging(false);
+    e.target.releasePointerCapture(e.pointerId);
   };
 
   const handleFetchRegister = async () => {
@@ -343,8 +355,9 @@ function App() {
           <div onClick={() => setCurrentView('archive')} style={{ padding: '12px 15px', borderRadius: '10px', cursor: 'pointer', background: currentView === 'archive' ? 'var(--card-bg)' : 'transparent', display: 'flex', alignItems: 'center', gap: '12px', fontSize: '0.95rem' }}>
             <Archive size={18} color="var(--accent)" /> 내 등기부 보관함
           </div>
-          <div onClick={() => setCurrentView('history')} style={{ padding: '12px 15px', borderRadius: '10px', cursor: 'pointer', background: currentView === 'history' ? 'var(--card-bg)' : 'transparent', display: 'flex', alignItems: 'center', gap: '12px', fontSize: '0.95rem' }}>
-            <MessageSquare size={18} color="var(--accent)" /> AI 상담 기록
+          {/* 메뉴 클릭 시 화면 이동 대신 팝업 창이 열리도록 변경 */}
+          <div onClick={() => setIsChatOpen(true)} style={{ padding: '12px 15px', borderRadius: '10px', cursor: 'pointer', background: isChatOpen ? 'var(--card-bg)' : 'transparent', display: 'flex', alignItems: 'center', gap: '12px', fontSize: '0.95rem' }}>
+            <MessageSquare size={18} color="var(--accent)" /> AI 챗봇 상담
           </div>
           <div onClick={() => setCurrentView('market')} style={{ padding: '12px 15px', borderRadius: '10px', cursor: 'pointer', background: currentView === 'market' ? 'var(--card-bg)' : 'transparent', display: 'flex', alignItems: 'center', gap: '12px', fontSize: '0.95rem' }}>
             <TrendingUp size={18} color="var(--accent)" /> 아파트 시세 조회
@@ -412,6 +425,7 @@ function App() {
           </div>
         )}
 
+        {/* 🌟 챗봇이 분리되면서 계약서 리포트는 이곳 본문에 넓게 출력되도록 수정되었습니다. */}
         {currentView === 'contract' && (
           <div className="fade-in" style={{ flex: 1, padding: '40px', overflowY: 'auto' }}>
             <button className="back-btn" onClick={() => setCurrentView('home')}><ArrowLeft size={20}/> 뒤로가기</button>
@@ -425,45 +439,14 @@ function App() {
                   <button onClick={handleAnalyze} className="main-btn" style={{ padding: '15px 40px', fontSize: '1.1rem' }}>{loading ? "AI 분석 중..." : "AI 분석 시작하기"}</button>
                 </div>
               </section>
-            </div>
-          </div>
-        )}
 
-        {currentView === 'history' && (
-          <div className="fade-in" style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100%', maxWidth: '1000px', margin: '0 auto', width: '100%' }}>
-            <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: '40px 20px', display: 'flex', flexDirection: 'column', gap: '30px' }}>
-              {!analysis && messages.length === 0 && !loading && (
-                <div style={{ textAlign: 'center', color: '#888', marginTop: '100px' }}><h3>진행된 분석이나 대화가 없습니다.</h3><p>왼쪽 메뉴의 '새 분석 시작'을 눌러주세요.</p></div>
-              )}
-              {loading && (
-                 <div style={{ display: 'flex', gap: '15px' }}><div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}><ShieldCheck size={24}/></div>
-                   <div style={{ padding: '20px', background: 'var(--card-bg)', borderRadius: '15px', border: '1px solid var(--border)' }}>문서를 확인하고 있습니다...</div>
-                 </div>
-              )}
+              {/* 분석 완료 시 결과 리포트 출력 */}
               {analysis && (
-                <div style={{ display: 'flex', gap: '15px' }}>
-                  <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', flexShrink: 0 }}><ShieldCheck size={24}/></div>
-                  <div style={{ flex: 1, background: 'var(--card-bg)', padding: '25px', borderRadius: '15px', border: '1px solid var(--border)' }}>
-                    <h3 style={{ marginTop: 0, color: 'var(--accent)', borderBottom: '1px solid var(--border)', paddingBottom: '15px', marginBottom: '20px' }}>📄 AI 계약서 정밀 분석 리포트</h3>
-                    <div className="md-content"><ReactMarkdown>{analysis}</ReactMarkdown></div>
-                  </div>
+                <div className="fade-in" style={{ marginTop: '30px', padding: '30px', background: 'var(--card-bg)', borderRadius: '15px', border: '1px solid var(--border)', textAlign: 'left' }}>
+                  <h3 style={{ color: 'var(--accent)', borderBottom: '1px solid var(--border)', paddingBottom: '15px', marginBottom: '20px' }}>📄 AI 계약서 정밀 분석 리포트</h3>
+                  <div className="md-content"><ReactMarkdown>{analysis}</ReactMarkdown></div>
                 </div>
               )}
-              {messages.map((m, i) => (
-                <div key={i} style={{ display: 'flex', gap: '15px', flexDirection: m.role === 'user' ? 'row-reverse' : 'row' }}>
-                  {m.role === 'ai' && <div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', flexShrink: 0 }}><ShieldCheck size={24}/></div>}
-                  <div style={{ maxWidth: '80%', background: m.role === 'user' ? '#f0f4f9' : 'var(--card-bg)', color: m.role === 'user' ? '#111' : 'var(--text)', padding: '20px', borderRadius: '15px', border: m.role === 'user' ? 'none' : '1px solid var(--border)', lineHeight: '1.6' }}>
-                    <div className="md-content"><ReactMarkdown>{m.text}</ReactMarkdown></div>
-                  </div>
-                </div>
-              ))}
-              {chatLoading && <div style={{ display: 'flex', gap: '15px' }}><div style={{ width: '40px', height: '40px', borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}><ShieldCheck size={24}/></div><div style={{ padding: '20px', background: 'var(--card-bg)', borderRadius: '15px', border: '1px solid var(--border)', color: '#888' }}>답변을 작성하고 있습니다...</div></div>}
-            </div>
-            <div style={{ padding: '20px 40px', background: 'var(--bg-main)' }}>
-              <div style={{ display: 'flex', background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: '30px', padding: '10px 20px', alignItems: 'center' }}>
-                <input value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder={analysis ? "궁금한 점을 질문해 보세요..." : "계약서를 먼저 분석해 주세요."} disabled={!analysis} style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', color: 'var(--text)', fontSize: '1rem', padding: '10px' }} onKeyPress={(e) => e.key === 'Enter' && analysis && handleChat()} />
-                <button onClick={handleChat} disabled={!analysis} style={{ background: 'var(--accent)', border: 'none', cursor: analysis ? 'pointer' : 'not-allowed', color: '#fff', width: '45px', height: '45px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: analysis ? 1 : 0.5 }}><Send size={20} style={{ marginLeft: '3px' }}/></button>
-              </div>
             </div>
           </div>
         )}
@@ -596,6 +579,88 @@ function App() {
           </div>
         )}
       </main>
+
+      {/* 🌟 언제든 부를 수 있는 플로팅 챗봇 팝업 영역 🌟 */}
+      {isChatOpen && (
+        <div style={{
+          position: 'fixed', right: '30px', bottom: '100px',
+          width: '380px', height: '550px',
+          minWidth: '300px', minHeight: '400px',
+          maxWidth: '90vw', maxHeight: '90vh',
+          transform: `translate(${chatOffset.x}px, ${chatOffset.y}px)`,
+          background: 'var(--bg-main)', border: '1px solid var(--border)',
+          borderRadius: '15px', boxShadow: '0 10px 40px rgba(0,0,0,0.2)',
+          display: 'flex', flexDirection: 'column', zIndex: 9999,
+          resize: 'both', overflow: 'hidden' // 🌟 마우스로 크기 조절이 가능하게 하는 핵심 CSS
+        }}>
+          {/* 드래그가 가능한 헤더 영역 */}
+          <div
+            onPointerDown={handleDragStart}
+            onPointerMove={handleDragMove}
+            onPointerUp={handleDragEnd}
+            style={{
+              padding: '15px', background: 'var(--accent)', color: '#fff',
+              cursor: isDragging ? 'grabbing' : 'grab',
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              userSelect: 'none', touchAction: 'none'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 'bold' }}>
+              <ShieldCheck size={20} /> SafeHome AI 상담
+            </div>
+            <button onClick={() => setIsChatOpen(false)} style={{ background: 'none', border: 'none', color: '#fff', cursor: 'pointer', fontSize: '1.2rem' }}>✖</button>
+          </div>
+
+          {/* 대화 내용 영역 */}
+          <div ref={chatScrollRef} style={{ flex: 1, overflowY: 'auto', padding: '20px', display: 'flex', flexDirection: 'column', gap: '15px', background: 'var(--card-bg)' }}>
+            {!analysis && messages.length === 0 && (
+              <div style={{ textAlign: 'center', color: '#888', marginTop: '50px', fontSize: '0.9rem' }}>
+                계약서를 먼저 분석해 주시면<br />더 정확한 상담이 가능합니다.
+              </div>
+            )}
+            
+            {/* 분석 완료 시 AI의 첫 인사말 */}
+            {analysis && messages.length === 0 && (
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <div style={{ width: '35px', height: '35px', borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', flexShrink: 0 }}><ShieldCheck size={20}/></div>
+                <div style={{ background: 'var(--bg-main)', color: 'var(--text)', padding: '15px', borderRadius: '15px', border: '1px solid var(--border)', fontSize: '0.95rem', lineHeight: '1.5' }}>
+                  <strong>계약서 분석이 완료되었습니다!</strong><br />화면의 리포트를 읽어보시고, 이해가 안 가거나 더 궁금한 점이 있다면 무엇이든 물어보세요.
+                </div>
+              </div>
+            )}
+
+            {messages.map((m, i) => (
+              <div key={i} style={{ display: 'flex', gap: '10px', flexDirection: m.role === 'user' ? 'row-reverse' : 'row' }}>
+                {m.role === 'ai' && <div style={{ width: '35px', height: '35px', borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', flexShrink: 0 }}><ShieldCheck size={20}/></div>}
+                <div style={{ maxWidth: '85%', background: m.role === 'user' ? '#f0f4f9' : 'var(--bg-main)', color: m.role === 'user' ? '#111' : 'var(--text)', padding: '15px', borderRadius: '15px', border: m.role === 'user' ? 'none' : '1px solid var(--border)', fontSize: '0.95rem', lineHeight: '1.5' }}>
+                  <div className="md-content"><ReactMarkdown>{m.text}</ReactMarkdown></div>
+                </div>
+              </div>
+            ))}
+            {chatLoading && <div style={{ display: 'flex', gap: '10px' }}><div style={{ width: '35px', height: '35px', borderRadius: '50%', background: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff' }}><ShieldCheck size={20}/></div><div style={{ padding: '15px', background: 'var(--bg-main)', borderRadius: '15px', border: '1px solid var(--border)', color: '#888', fontSize: '0.95rem' }}>답변을 작성하고 있습니다...</div></div>}
+          </div>
+
+          {/* 입력창 영역 */}
+          <div style={{ padding: '15px', borderTop: '1px solid var(--border)', background: 'var(--bg-main)', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <input value={chatInput} onChange={(e) => setChatInput(e.target.value)} placeholder={analysis ? "질문을 입력하세요..." : "계약서를 먼저 분석해 주세요."} disabled={!analysis} style={{ flex: 1, padding: '12px', borderRadius: '20px', border: '1px solid var(--border)', background: 'var(--card-bg)', color: 'var(--text)', outline: 'none' }} onKeyPress={(e) => e.key === 'Enter' && analysis && handleChat()} />
+            <button onClick={handleChat} disabled={!analysis} style={{ background: 'var(--accent)', border: 'none', cursor: analysis ? 'pointer' : 'not-allowed', color: '#fff', width: '40px', height: '40px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: analysis ? 1 : 0.5 }}><Send size={18} style={{ marginLeft: '2px' }}/></button>
+          </div>
+        </div>
+      )}
+
+      {/* 🌟 우측 하단 플로팅 챗봇 아이콘 버튼 */}
+      <button
+        onClick={() => setIsChatOpen(!isChatOpen)}
+        style={{
+          position: 'fixed', right: '30px', bottom: '30px',
+          width: '60px', height: '60px', borderRadius: '50%',
+          background: 'var(--accent)', color: '#fff', border: 'none',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          cursor: 'pointer', boxShadow: '0 4px 15px rgba(0,0,0,0.2)', zIndex: 9998
+        }}
+      >
+        <MessageSquare size={28} />
+      </button>
 
       {isPostcodeOpen && (
         <div className="postcode-overlay" onClick={() => setIsPostcodeOpen(false)}>

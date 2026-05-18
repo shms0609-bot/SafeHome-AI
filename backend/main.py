@@ -64,7 +64,7 @@ def get_db():
         db.close()
 
 # ==========================================
-# 🌟 2. CODEF API 서비스 (동/호수 조회 추가)
+# 🌟 2. CODEF API 서비스 (동/호수 조회 지원)
 # ==========================================
 class CodefService:
     def __init__(self):
@@ -132,7 +132,6 @@ class CodefService:
         if not token: return {"error": "CODEF 토큰 발급 실패"}
         url = f"{self.base_url}/kr/public/lt/real-estate-board/market-price-information"
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
-        # 🌟 동, 호 파라미터 반영 및 searchGbn 처리
         payload = {
             "organization": "0011", 
             "searchGbn": params.get("search_gbn", "1"), 
@@ -148,11 +147,20 @@ class CodefService:
 codef = CodefService()
 
 # ==========================================
-# 🌟 3. AI API 다중 키(로테이션) 로직
+# 🌟 3. AI 다중 키 로직 및 법령 데이터(txt) 로드
 # ==========================================
 api_keys_str = os.getenv("GEMINI_API_KEYS", "").strip().strip('"').strip("'")
 api_keys_list = [k.strip() for k in api_keys_str.split(",") if k.strip()]
 current_key_index = 0  
+
+# 법령 텍스트 로드
+LEGAL_KNOWLEDGE = ""
+try:
+    with open("laws.txt", "r", encoding="utf-8") as f:
+        LEGAL_KNOWLEDGE = f.read()
+    print("✅ 법령 데이터(laws.txt) 로드 완료! AI가 법률 지식으로 무장했습니다.")
+except Exception as e:
+    print("⚠️ 법령 파일을 찾을 수 없습니다 (backend 폴더 내에 laws.txt를 만들어주세요):", e)
 
 # ==========================================
 # 🌟 4. 데이터 모델 및 API 엔드포인트
@@ -161,7 +169,6 @@ class UserRegister(BaseModel): user_id: str; password: str; username: str = None
 class LoginRequest(BaseModel): user_id: str; password: str
 class RealEstateRequest(BaseModel): user_id: str; addr_sido: str; addr_sigungu: str; addr_roadName: str = ""; addr_buildingNumber: str = ""; dong: str = ""; ho: str = ""; realtyType: str = "1" 
 class EstateListRequest(BaseModel): addr_sido: str; addr_sigun: str; addr_dong: str
-# 🌟 동/호 파라미터 추가
 class MarketPriceRequest(BaseModel): complex_no: str; search_gbn: str = "1"; dong: str = ""; ho: str = ""
 class ChatRequest(BaseModel): user_message: str; analysis_context: str
 class VerifyRequest(BaseModel): receipt_id: str; user_id: str
@@ -269,12 +276,29 @@ async def analyze_contract(file: UploadFile = File(...)):
 async def chat_with_ai(request: ChatRequest):
     global current_key_index
     try:
-        sys_instruct = f"당신은 SafeHome AI 임대차 분쟁 전문가입니다. 다음 분석 결과를 바탕으로 상담하세요: {request.analysis_context}"
+        # 🌟 시스템 프롬프트: 법령 데이터와 계약서 분석 결과를 통합 주입
+        sys_instruct = f"""당신은 대한민국 법률에 기반하여 세입자의 권리를 보호하는 'SafeHome AI 임대차 분쟁 최고 전문가'입니다. 
+
+[명령어]
+1. 반드시 아래 제공된 [대한민국 부동산 법령 및 판례]를 최우선으로 참고하여 정확하고 논리적인 법률 조언을 제공하세요.
+2. 사용자의 상황을 [계약서 분석 결과]와 대조하여 위험 요소를 파악하세요.
+3. 법률 용어는 사용자가 이해하기 쉽게 풀어서 설명하되, 근거가 되는 '법령 조항(예: 주택임대차보호법 제X조)'을 명시해 주면 신뢰도가 올라갑니다.
+
+[대한민국 부동산 법령 및 판례 모음]
+{LEGAL_KNOWLEDGE}
+
+[계약서 분석 결과]
+{request.analysis_context}
+"""
         attempts = 0
         while attempts < len(api_keys_list):
             try:
                 client = Client(api_key=api_keys_list[current_key_index])
-                response = client.models.generate_content(model="gemini-2.5-flash", contents=request.user_message, config=types.GenerateContentConfig(system_instruction=sys_instruct))
+                response = client.models.generate_content(
+                    model="gemini-2.5-flash", 
+                    contents=request.user_message, 
+                    config=types.GenerateContentConfig(system_instruction=sys_instruct)
+                )
                 return {"reply": response.text}
             except:
                 current_key_index = (current_key_index + 1) % len(api_keys_list)

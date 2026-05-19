@@ -331,10 +331,10 @@ function App() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', backgroundColor: 'var(--bg-main)', color: 'var(--text)' }}>
       
+      {/* 🌟 1. 모바일 헤더 로고 변경 🌟 */}
       <div className="mobile-header">
-        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }} onClick={() => navTo('home')}>
-          <ShieldCheck size={28} color="var(--accent)" />
-          <span style={{ fontSize: '1.3rem', fontWeight: 'bold' }}>집야</span>
+        <div style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }} onClick={() => navTo('home')}>
+          <img src={theme === 'dark' ? '/logo-dark.jpg' : '/logo-light.jpg'} alt="집야 로고" style={{ height: '40px', borderRadius: '10px' }} />
         </div>
         <button className="icon-btn" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
           {isMobileMenuOpen ? <X size={28} /> : <Menu size={28} />}
@@ -344,9 +344,9 @@ function App() {
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
         
         <aside className={`sidebar ${isMobileMenuOpen ? 'open' : ''}`}>
-          <div className="sidebar-logo" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px', cursor: 'pointer', marginBottom: '20px' }} onClick={() => navTo('home')}>
-            <ShieldCheck size={28} color="var(--accent)" />
-            <span style={{ fontSize: '1.3rem', fontWeight: 'bold' }}>집야</span>
+          {/* 🌟 2. 사이드바 로고 변경 🌟 */}
+          <div className="sidebar-logo" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '10px', cursor: 'pointer', marginBottom: '20px' }} onClick={() => navTo('home')}>
+            <img src={theme === 'dark' ? '/logo-dark.jpg' : '/logo-light.jpg'} alt="집야 로고" style={{ height: '55px', borderRadius: '12px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }} />
           </div>
           <button onClick={() => navTo('home')} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 15px', borderRadius: '50px', background: 'var(--card-bg)', border: '1px solid var(--border)', color: 'var(--text)', cursor: 'pointer', fontSize: '1rem', fontWeight: '500', marginBottom: '30px', boxShadow: '0 2px 5px rgba(0,0,0,0.05)' }}>
             <Plus size={20} /> 새 분석 시작

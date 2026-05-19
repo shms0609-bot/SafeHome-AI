@@ -334,7 +334,7 @@ function App() {
       <div className="mobile-header">
         <div style={{ display: 'flex', alignItems: 'center', gap: '10px', cursor: 'pointer' }} onClick={() => navTo('home')}>
           <ShieldCheck size={28} color="var(--accent)" />
-          <span style={{ fontSize: '1.3rem', fontWeight: 'bold' }}>SafeHome</span>
+          <span style={{ fontSize: '1.3rem', fontWeight: 'bold' }}>집야</span>
         </div>
         <button className="icon-btn" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
           {isMobileMenuOpen ? <X size={28} /> : <Menu size={28} />}
@@ -346,7 +346,7 @@ function App() {
         <aside className={`sidebar ${isMobileMenuOpen ? 'open' : ''}`}>
           <div className="sidebar-logo" style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px', cursor: 'pointer', marginBottom: '20px' }} onClick={() => navTo('home')}>
             <ShieldCheck size={28} color="var(--accent)" />
-            <span style={{ fontSize: '1.3rem', fontWeight: 'bold' }}>SafeHome</span>
+            <span style={{ fontSize: '1.3rem', fontWeight: 'bold' }}>집야</span>
           </div>
           <button onClick={() => navTo('home')} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 15px', borderRadius: '50px', background: 'var(--card-bg)', border: '1px solid var(--border)', color: 'var(--text)', cursor: 'pointer', fontSize: '1rem', fontWeight: '500', marginBottom: '30px', boxShadow: '0 2px 5px rgba(0,0,0,0.05)' }}>
             <Plus size={20} /> 새 분석 시작
@@ -603,7 +603,6 @@ function App() {
 
                   {marketLoading && <div style={{ textAlign: 'center', padding: '30px', color: '#888' }}>시세 정보를 불러오고 있습니다...</div>}
                   
-                  {/* 1. 선택한 아파트 시세 상세 정보 (먼저 보여줌) */}
                   {marketResult && marketResult.data && (
                     <div className="fade-in" style={{ marginTop: '20px', borderTop: '2px solid var(--accent)', paddingTop: '30px', marginBottom: '40px' }}>
                       <div className="market-header">
@@ -667,7 +666,6 @@ function App() {
                     </div>
                   )}
 
-                  {/* 2. 단지 목록 (항상 아래에 유지되도록 변경!) */}
                   {estateList.length > 0 && (
                     <div className="fade-in" style={{ borderTop: marketResult ? '2px dashed var(--border)' : 'none', paddingTop: marketResult ? '30px' : '0' }}>
                       <h4 style={{ marginBottom: '15px', color: 'var(--text)' }}>

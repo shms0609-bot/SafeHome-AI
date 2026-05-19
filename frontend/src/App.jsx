@@ -331,7 +331,6 @@ function App() {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', backgroundColor: 'var(--bg-main)', color: 'var(--text)' }}>
       
-      {/* 🌟 1. 모바일 헤더 로고 변경 🌟 */}
       <div className="mobile-header">
         <div style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }} onClick={() => navTo('home')}>
           <img src={theme === 'dark' ? '/logo-dark.jpg' : '/logo-light.jpg'} alt="집야 로고" style={{ height: '40px', borderRadius: '10px' }} />
@@ -344,7 +343,6 @@ function App() {
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
         
         <aside className={`sidebar ${isMobileMenuOpen ? 'open' : ''}`}>
-          {/* 🌟 2. 사이드바 로고 변경 🌟 */}
           <div className="sidebar-logo" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '10px', cursor: 'pointer', marginBottom: '20px' }} onClick={() => navTo('home')}>
             <img src={theme === 'dark' ? '/logo-dark.jpg' : '/logo-light.jpg'} alt="집야 로고" style={{ height: '55px', borderRadius: '12px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }} />
           </div>
@@ -377,33 +375,54 @@ function App() {
         </aside>
 
         <main className="main-content">
+          
+          {/* 🌟 여기서부터 토스 스타일로 변경된 메인(home) 화면입니다 🌟 */}
           {currentView === 'home' && (
-            <div className="fade-in" style={{ flex: 1, overflowY: 'auto', padding: '40px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <h2 className="responsive-title" style={{ fontWeight: 'bold', background: 'linear-gradient(90deg, #1a73e8, #9c27b0)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', marginBottom: '40px', textAlign: 'center' }}>무엇을 도와드릴까요?</h2>
-              <div className="service-grid">
-                <div className="service-card" onClick={() => navTo('contract')}>
-                  <div className="icon-wrapper blue"><FileSearch size={40} color="white" /></div>
+            <div className="fade-in" style={{ flex: 1, overflowY: 'auto', padding: '50px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'var(--bg-main)' }}>
+              
+              <div style={{ textAlign: 'center', marginBottom: '50px' }}>
+                <h2 style={{ fontSize: '2rem', fontWeight: '800', color: 'var(--text)', margin: '0 0 10px 0' }}>어떤 서비스가 필요하신가요?</h2>
+                <p style={{ fontSize: '1.1rem', color: '#8b95a1', margin: 0 }}>집야가 안전한 부동산 계약을 도와드릴게요.</p>
+              </div>
+
+              <div className="service-grid" style={{ gap: '24px', maxWidth: '1000px' }}>
+                <div className="toss-card" onClick={() => navTo('contract')}>
+                  <div className="toss-icon-box">
+                    <FileSearch size={32} color="#FF3B30" />
+                  </div>
                   <h4>스마트 계약서 분석</h4>
                   <p>계약서 이미지를 올려 AI 위험 진단을 받아보세요.</p>
                 </div>
-                <div className="service-card" onClick={() => navTo('register')}>
-                  <div className="icon-wrapper green"><Building2 size={40} color="white" /></div>
+                
+                <div className="toss-card" onClick={() => navTo('register')}>
+                  <div className="toss-icon-box">
+                    <Building2 size={32} color="#FF3B30" />
+                  </div>
                   <h4>실시간 등기 발급</h4>
                   <p>대법원 데이터를 바탕으로 권리 관계를 확인합니다.</p>
                 </div>
-                <div className="service-card" onClick={() => navTo('market')}>
-                  <div className="icon-wrapper" style={{ background: '#fbbc05' }}><TrendingUp size={40} color="white" /></div>
+                
+                <div className="toss-card" onClick={() => navTo('market')}>
+                  <div className="toss-icon-box">
+                    <TrendingUp size={32} color="#FF3B30" />
+                  </div>
                   <h4>아파트 시세 조회</h4>
                   <p>최신 면적별 실거래가와 전세가를 한눈에 확인하세요.</p>
                 </div>
-                <div className="service-card" onClick={() => navTo('history')}>
-                  <div className="icon-wrapper yellow"><MessageSquare size={40} color="white" /></div>
+                
+                <div className="toss-card" onClick={() => navTo('history')}>
+                  <div className="toss-icon-box">
+                    <MessageSquare size={32} color="#FF3B30" />
+                  </div>
                   <h4>계약서 AI 상담</h4>
                   <p>분석된 계약서 결과를 바탕으로 AI와 깊이 있게 상담하세요.</p>
                 </div>
-                <div className="service-card wide-card" onClick={() => navTo('freechat')}>
-                  <div className="icon-wrapper" style={{ background: '#9c27b0' }}><Maximize2 size={40} color="white" /></div>
-                  <h4>AI 상담</h4>
+                
+                <div className="toss-card wide-card" onClick={() => navTo('freechat')}>
+                  <div className="toss-icon-box">
+                    <Maximize2 size={32} color="#FF3B30" />
+                  </div>
+                  <h4>AI 자유 상담</h4>
                   <p>부동산 관련 궁금증을 언제든지 자유롭게 물어보세요.</p>
                 </div>
               </div>

@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Sun, Moon, Send, FileSearch, Building2, ShieldCheck, MessageSquare, ArrowLeft, Upload, MapPin, LogOut, Plus, Archive, TrendingUp, Building, Maximize2, Menu, X, Clock } from 'lucide-react';
+import { Sun, Moon, Send, FileSearch, Building2, ShieldCheck, MessageSquare, ArrowLeft, Upload, MapPin, LogOut, Plus, Archive, TrendingUp, Building, Maximize2, Menu, X } from 'lucide-react';
 import DaumPostcode from 'react-daum-postcode';
 import { Bootpay } from '@bootpay/client-js';
 import './App.css';
 
-const API_BASE_URL = "https://safehome-ai-1.onrender.com";
+const API_BASE_URL = "https://safehome-ai-pkkv.onrender.com"; 
 
 const formatKoreanPrice = (priceStr) => {
   const num = Number(priceStr);
@@ -126,7 +126,6 @@ function App() {
   const [regDong, setRegDong] = useState("");
   const [regHo, setRegHo] = useState("");
   const [regRealtyType, setRegRealtyType] = useState("1");
-  const [regInterval, setRegInterval] = useState(24); // 🌟 모니터링 주기 상태 추가 (기본 24시간)
   const [regHistory, setRegHistory] = useState([]); 
 
   const [searchSido, setSearchSido] = useState("");
@@ -230,17 +229,7 @@ function App() {
     try {
       const r = await fetch(`${API_BASE_URL}/fetch-real-estate`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          user_id: userId, 
-          addr_sido: regSido, 
-          addr_sigungu: regSigungu, 
-          addr_roadName: regRoadName, 
-          addr_buildingNumber: regBldNum, 
-          dong: regDong, 
-          ho: regHo, 
-          realtyType: regRealtyType,
-          interval: parseInt(regInterval) // 🌟 백엔드로 주기(시간) 데이터 전송
-        })
+        body: JSON.stringify({ user_id: userId, addr_sido: regSido, addr_sigungu: regSigungu, addr_roadName: regRoadName, addr_buildingNumber: regBldNum, dong: regDong, ho: regHo, realtyType: regRealtyType })
       });
       const d = await r.json();
       if (d.error) {
@@ -386,7 +375,6 @@ function App() {
         </aside>
 
         <main className="main-content">
-          
           {currentView === 'home' && (
             <div className="fade-in" style={{ flex: 1, overflowY: 'auto', padding: '50px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'var(--bg-main)' }}>
               
@@ -466,27 +454,6 @@ function App() {
                     <input placeholder="동 (예: 101동)" value={regDong} onChange={(e) => setRegDong(e.target.value)} style={{ flex: 1, padding: '15px', borderRadius: '10px', border: '1px solid var(--border)' }} />
                     <input placeholder="호 (예: 202호)" value={regHo} onChange={(e) => setRegHo(e.target.value)} style={{ flex: 1, padding: '15px', borderRadius: '10px', border: '1px solid var(--border)' }} />
                   </div>
-                  
-                  {/* 🌟 주기 설정 UI 추가 🌟 */}
-                  <div style={{ marginBottom: '30px', padding: '20px', background: '#f8f9fa', borderRadius: '12px', border: '1px solid #e9ecef' }}>
-                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px', fontWeight: 'bold', color: '#495057' }}>
-                      <Clock size={18} /> 실시간 모니터링 주기 설정
-                    </label>
-                    <p style={{ fontSize: '0.85rem', color: '#868e96', marginBottom: '15px' }}>
-                      설정하신 주기에 맞춰 대법원 변동 사항을 자동 검사하고, 위험 감지 시 문자를 발송해 드립니다.
-                    </p>
-                    <select 
-                      value={regInterval} 
-                      onChange={(e) => setRegInterval(e.target.value)} 
-                      style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid #ced4da', background: '#fff', fontSize: '1rem', outline: 'none' }}
-                    >
-                      <option value="1">⏱️ 1시간마다 검사 (가계약 직후 초고위험군)</option>
-                      <option value="3">⏱️ 3시간마다 검사 (잔금 치르기 전 고위험군)</option>
-                      <option value="12">⏱️ 12시간마다 검사 (입주 초반 주의 요망)</option>
-                      <option value="24">⏱️ 24시간마다 검사 (일반 안심 거주자 / 권장)</option>
-                    </select>
-                  </div>
-
                   <button onClick={handleFetchRegister} disabled={regLoading} className="main-btn" style={{ width: '100%', display: 'flex', justifyContent: 'center', gap: '10px' }}>
                     <Building2 size={20} /> {regLoading ? "대법원 통신 중..." : "등기부등본 가져오기 (열람권 1장 차감)"}
                   </button>
@@ -518,13 +485,14 @@ function App() {
                 <h3 style={{ color: 'var(--accent)', marginBottom: '10px', fontSize: '1.8rem', display: 'flex', alignItems: 'center', gap: '10px' }}><Archive/> 내 등기부 보관함</h3>
                 <p style={{ color: '#888', marginBottom: '30px' }}>한 번 발급받은 등기부등본은 언제든 다시 다운로드할 수 있습니다.</p>
 
+                {/* 🌟 실시간 변동 감지 알림 데모 패널 🌟 */}
                 <div className="fade-in" style={{ background: '#fff5f5', padding: '25px', borderRadius: '20px', marginBottom: '30px', border: '1px solid #ffe3e3', display: 'flex', flexDirection: 'column', gap: '15px' }}>
                   <div>
                     <h4 style={{ color: '#e03131', margin: '0 0 8px 0', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '1.2rem' }}>
                       <ShieldCheck size={24} /> 실시간 등기 변동 감지 모니터링 (MVP 데모용)
                     </h4>
                     <p style={{ margin: 0, fontSize: '0.95rem', color: '#888', lineHeight: '1.5' }}>
-                      대법원 신청사건 데이터를 설정된 주기에 맞춰 상시 모니터링하고 있습니다. 심사위원의 번호를 입력하고 위험 알림 발송을 현장에서 직접 시연해 보세요!
+                      대법원 신청사건 데이터를 상시 모니터링하고 있습니다. 심사위원의 번호를 입력하고 위험 알림 발송을 현장에서 직접 시연해 보세요!
                     </p>
                   </div>
                   <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
@@ -560,14 +528,7 @@ function App() {
                     <div key={item.id} className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px' }}>
                       <div>
                         <div style={{ fontWeight: 'bold', fontSize: '1.1rem', marginBottom: '5px' }}>{item.address}</div>
-                        <div style={{ fontSize: '0.9rem', color: '#888', marginBottom: '3px' }}>발급 일시: {new Date(item.created_at).toLocaleString()}</div>
-                        {/* 🌟 보관함에 주기가 설정되었음을 뱃지로 시각화 🌟 */}
-                        {item.monitoring_interval_hours && (
-                          <div style={{ display: 'inline-block', fontSize: '0.75rem', background: '#e3f2fd', color: '#1976d2', padding: '4px 8px', borderRadius: '4px', fontWeight: 'bold' }}>
-                            <Clock size={12} style={{ verticalAlign: 'middle', marginRight: '4px' }}/> 
-                            {item.monitoring_interval_hours}시간 주기 모니터링 중
-                          </div>
-                        )}
+                        <div style={{ fontSize: '0.9rem', color: '#888' }}>발급 일시: {new Date(item.created_at).toLocaleString()}</div>
                       </div>
                       <button onClick={() => downloadSavedPDF(item.pdf_base64, item.address)} className="main-btn" style={{ margin: 0, padding: '10px 20px' }}>열람 / 다운로드</button>
                     </div>

@@ -5,7 +5,7 @@ import DaumPostcode from 'react-daum-postcode';
 import { Bootpay } from '@bootpay/client-js';
 import './App.css';
 
-const API_BASE_URL = "https://safehome-ai-pkkv.onrender.com"; 
+const API_BASE_URL = "https://safehome-ai-1.onrender.com";
 
 const formatKoreanPrice = (priceStr) => {
   const num = Number(priceStr);

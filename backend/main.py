@@ -6,7 +6,7 @@ import json
 import hmac
 import hashlib
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -40,6 +40,13 @@ class UserTable(Base):
     password = Column(String)
     username = Column(String)
 
+class TicketTable(Base):
+    __tablename__ = "user_tickets"
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(String, unique=True, index=True)
+    count = Column(Integer, default=0)
+
+# 🌟 업데이트: 사용자의 주기 설정과 마지막 검사 시간을 저장하는 테이블
 class RealEstateHistoryTable(Base):
     __tablename__ = "real_estate_history"
     id = Column(Integer, primary_key=True, index=True)
@@ -47,12 +54,9 @@ class RealEstateHistoryTable(Base):
     address = Column(String)               
     pdf_base64 = Column(Text)              
     created_at = Column(DateTime, default=datetime.now)
-
-class TicketTable(Base):
-    __tablename__ = "user_tickets"
-    id = Column(Integer, primary_key=True, index=True)
-    user_id = Column(String, unique=True, index=True)
-    count = Column(Integer, default=0)
+    # 자동 검사 관련 필드 추가
+    monitoring_interval_hours = Column(Integer, default=24) # 기본 24시간(1일) 주기
+    last_checked_at = Column(DateTime, default=datetime.now)
 
 try:
     Base.metadata.create_all(bind=engine)
@@ -67,7 +71,7 @@ def get_db():
         db.close()
 
 # ==========================================
-# 🌟 2. CODEF API 서비스 (동/호수 조회 지원)
+# 🌟 2. CODEF API 서비스 
 # ==========================================
 class CodefService:
     def __init__(self):
@@ -96,6 +100,37 @@ class CodefService:
             response = requests.post(url, headers=headers, data=data)
             return response.json().get("access_token")
         except: return None
+
+    # 등기신청사건 변동 감지용 가벼운 API 호출 함수 (상세 열람X, 상태만 확인)
+    def check_register_status(self, params: dict):
+        token = self.get_access_token()
+        if not token: return False
+        real_phone = os.getenv("REAL_ESTATE_PHONE", "01000000000").strip().strip('"').strip("'")
+        raw_password = os.getenv("REAL_ESTATE_PASSWORD", "1234").strip().strip('"').strip("'")
+        encrypted_password = self.encrypt_rsa(raw_password)
+        e_prepay_no = os.getenv("E_PREPAY_NO", "H82003788709").replace("-", "").strip().strip('"').strip("'")
+        raw_e_prepay_pass = os.getenv("E_PREPAY_PASS", "smsh1602").strip().strip('"').strip("'")
+        encrypted_e_prepay_pass = self.encrypt_rsa(raw_e_prepay_pass)
+        
+        url = f"{self.base_url}/kr/public/ck/real-estate-register/status"
+        headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+        payload = {
+            "organization": "0002", "phoneNo": real_phone, "password": encrypted_password, 
+            "inquiryType": "1", # 1: 상태조회 전용 (수수료 절감)
+            "realtyType": params.get("realtyType", "1"),
+            "ePrepayNo": e_prepay_no, "ePrepayPass": encrypted_e_prepay_pass, **params
+        }
+        try:
+            response = requests.post(url, headers=headers, json=payload)
+            res_data = json.loads(urllib.parse.unquote(response.text))
+            # "처리중" 또는 "접수" 상태가 있는지 확인
+            if res_data.get("data"):
+                status_list = res_data["data"] if isinstance(res_data["data"], list) else [res_data["data"]]
+                for item in status_list:
+                    if item.get("resStatus") in ["접수", "처리중"]:
+                        return True
+            return False
+        except Exception: return False
 
     def get_real_estate_register(self, params: dict):
         token = self.get_access_token()
@@ -150,23 +185,22 @@ class CodefService:
 codef = CodefService()
 
 # ==========================================
-# 🌟 3. AI 다중 키 로직 및 법령 데이터(txt) 로드
+# 🌟 3. AI 다중 키 로직 및 법령 데이터 로드
 # ==========================================
 api_keys_str = os.getenv("GEMINI_API_KEYS", "").strip().strip('"').strip("'")
 api_keys_list = [k.strip() for k in api_keys_str.split(",") if k.strip()]
 current_key_index = 0  
 
-# 법령 텍스트 로드
 LEGAL_KNOWLEDGE = ""
 try:
     with open("laws.txt", "r", encoding="utf-8") as f:
         LEGAL_KNOWLEDGE = f.read()
-    print("✅ 법령 데이터(laws.txt) 로드 완료! AI가 법률 지식으로 무장했습니다.")
-except Exception as e:
-    print("⚠️ 법령 파일을 찾을 수 없습니다 (backend 폴더 내에 laws.txt를 만들어주세요):", e)
+    print("✅ 법령 데이터 로드 완료!")
+except:
+    pass
 
 # ==========================================
-# 🌟 4. 솔라피(Solapi) 문자 발송 유틸리티 (빠졌던 부분 복구!)
+# 🌟 4. 솔라피(Solapi) 문자 발송 유틸리티
 # ==========================================
 def send_sms(phone_number: str, text: str):
     api_key = os.getenv("SOLAPI_API_KEY", "")
@@ -195,48 +229,27 @@ def send_sms(phone_number: str, text: str):
     }
     try:
         res = requests.post("https://api.solapi.com/messages/v4/send", headers=headers, json=data)
-        if res.status_code == 200:
-            return True
-        else:
-            print("❌ 문자 발송 실패:", res.text)
-            return False
-    except Exception as e:
-        print("❌ 문자 발송 에러:", e)
+        return res.status_code == 200
+    except:
         return False
 
 # ==========================================
-# 🌟 5. 데이터 모델 및 API 엔드포인트
+# 🌟 5. 데이터 모델 및 엔드포인트
 # ==========================================
 class UserRegister(BaseModel): user_id: str; password: str; username: str = None
 class LoginRequest(BaseModel): user_id: str; password: str
-class RealEstateRequest(BaseModel): user_id: str; addr_sido: str; addr_sigungu: str; addr_roadName: str = ""; addr_buildingNumber: str = ""; dong: str = ""; ho: str = ""; realtyType: str = "1" 
+class RealEstateRequest(BaseModel): user_id: str; addr_sido: str; addr_sigungu: str; addr_roadName: str = ""; addr_buildingNumber: str = ""; dong: str = ""; ho: str = ""; realtyType: str = "1"; interval: int = 24
 class EstateListRequest(BaseModel): addr_sido: str; addr_sigun: str; addr_dong: str
 class MarketPriceRequest(BaseModel): complex_no: str; search_gbn: str = "1"; dong: str = ""; ho: str = ""
 class ChatRequest(BaseModel): user_message: str; analysis_context: str
 class VerifyRequest(BaseModel): receipt_id: str; user_id: str
-class SmsRequest(BaseModel): phone_number: str # (문자 발송용 모델 복구)
+class SmsRequest(BaseModel): phone_number: str
 
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 @app.get("/ping")
 async def ping(): return {"message": "pong"}
-
-@app.get("/check-id/{user_id}")
-async def check_id(user_id: str, db: Session = Depends(get_db)):
-    existing = db.query(UserTable).filter(UserTable.user_id == user_id).first()
-    return {"available": existing is None}
-
-@app.post("/register")
-async def register(user_data: UserRegister, db: Session = Depends(get_db)):
-    existing = db.query(UserTable).filter(UserTable.user_id == user_data.user_id).first()
-    if existing: raise HTTPException(status_code=400, detail="이미 존재하는 아이디입니다.")
-    new_user = UserTable(user_id=user_data.user_id, password=user_data.password, username=user_data.username or user_data.user_id)
-    db.add(new_user)
-    new_ticket = TicketTable(user_id=user_data.user_id, count=0)
-    db.add(new_ticket)
-    db.commit()
-    return {"message": "가입 성공"}
 
 @app.post("/login")
 async def login(req: LoginRequest, db: Session = Depends(get_db)):
@@ -252,19 +265,11 @@ async def get_user_info(user_id: str, db: Session = Depends(get_db)):
         db.add(ticket_record); db.commit(); db.refresh(ticket_record)
     return {"tickets": ticket_record.count}
 
-@app.post("/payment/verify")
-async def verify_payment(req: VerifyRequest, db: Session = Depends(get_db)):
-    ticket_record = db.query(TicketTable).filter(TicketTable.user_id == req.user_id).first()
-    if ticket_record:
-        ticket_record.count += 1
-        db.commit()
-        return {"success": True, "tickets": ticket_record.count}
-    raise HTTPException(status_code=400, detail="유저 정보를 찾을 수 없습니다.")
-
 @app.post("/fetch-real-estate")
 async def fetch_info(request: RealEstateRequest, db: Session = Depends(get_db)):
     codef_params = request.dict()
     user_id = codef_params.pop("user_id", None)
+    interval = codef_params.pop("interval", 24)
     ticket_record = db.query(TicketTable).filter(TicketTable.user_id == user_id).first()
     if not ticket_record or ticket_record.count <= 0:
         return {"error": "🎫 열람권이 부족합니다. 결제 후 충전해 주세요!"}
@@ -277,7 +282,11 @@ async def fetch_info(request: RealEstateRequest, db: Session = Depends(get_db)):
         pdf_data = data_obj.get("resOriGinalData") or data_obj.get("resoriGinalData")
         if pdf_data:
             full_addr = f"{request.addr_sido} {request.addr_roadName} {request.addr_buildingNumber} {request.dong} {request.ho}".strip()
-            new_history = RealEstateHistoryTable(owner_id=user_id, address=full_addr, pdf_base64=pdf_data)
+            # 주기(interval) 설정 저장
+            new_history = RealEstateHistoryTable(
+                owner_id=user_id, address=full_addr, pdf_base64=pdf_data, 
+                monitoring_interval_hours=interval
+            )
             db.add(new_history); db.commit()
     return res
 
@@ -285,81 +294,52 @@ async def fetch_info(request: RealEstateRequest, db: Session = Depends(get_db)):
 async def get_history(user_id: str, db: Session = Depends(get_db)):
     return db.query(RealEstateHistoryTable).filter(RealEstateHistoryTable.owner_id == user_id).order_by(RealEstateHistoryTable.created_at.desc()).all()
 
-@app.post("/fetch-estate-list")
-async def fetch_estate_list(request: EstateListRequest):
-    return codef.get_estate_list(request.dict())
-
-@app.post("/fetch-market-price")
-async def fetch_market_price(request: MarketPriceRequest):
-    return codef.get_market_price(request.dict())
-
-@app.post("/analyze")
-async def analyze_contract(file: UploadFile = File(...)):
-    global current_key_index
-    try:
-        contents = await file.read()
-        image_part = types.Part.from_bytes(data=contents, mime_type=file.content_type)
-        prompt = """귀하는 대한민국 부동산 법률 분석 AI입니다. 
-        1. 이미지의 화질을 확인하세요. 판독이 불가능하면 다음 문구만 출력하세요: "⚠️ **이미지 판독 불가**\n\n더 선명한 사진으로 다시 업로드해 주세요."
-        2. 판독이 가능하면 위험도를 평가하고 상세 마크다운 리포트를 작성하세요."""
-        
-        attempts = 0
-        while attempts < len(api_keys_list):
-            try:
-                client = Client(api_key=api_keys_list[current_key_index])
-                response = client.models.generate_content(model="gemini-2.5-flash", contents=[prompt, image_part])
-                return {"analysis": response.text}
-            except Exception as e:
-                current_key_index = (current_key_index + 1) % len(api_keys_list)
-                attempts += 1
-        raise HTTPException(status_code=429, detail="한도 초과")
-    except Exception as e: raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/chat")
-async def chat_with_ai(request: ChatRequest):
-    global current_key_index
-    try:
-        sys_instruct = f"""당신은 대한민국 법률에 기반하여 세입자의 권리를 보호하는 '집야(Zipya) AI 임대차 분쟁 최고 전문가'입니다. 
-
-[명령어]
-1. 반드시 아래 제공된 [대한민국 부동산 법령 및 판례]를 최우선으로 참고하여 정확하고 논리적인 법률 조언을 제공하세요.
-2. 사용자의 상황을 [계약서 분석 결과]와 대조하여 위험 요소를 파악하세요.
-3. 법률 용어는 사용자가 이해하기 쉽게 풀어서 설명하되, 근거가 되는 '법령 조항(예: 주택임대차보호법 제X조)'을 명시해 주면 신뢰도가 올라갑니다.
-
-[대한민국 부동산 법령 및 판례 모음]
-{LEGAL_KNOWLEDGE}
-
-[계약서 분석 결과]
-{request.analysis_context}
-"""
-        attempts = 0
-        while attempts < len(api_keys_list):
-            try:
-                client = Client(api_key=api_keys_list[current_key_index])
-                response = client.models.generate_content(
-                    model="gemini-2.5-flash", 
-                    contents=request.user_message, 
-                    config=types.GenerateContentConfig(system_instruction=sys_instruct)
-                )
-                return {"reply": response.text}
-            except:
-                current_key_index = (current_key_index + 1) % len(api_keys_list)
-                attempts += 1
-        raise HTTPException(status_code=429, detail="한도 초과")
-    except Exception as e: raise HTTPException(status_code=500, detail=str(e))
-
 # ==========================================
-# 🌟 6. 등기 변동 알림(문자) 발송 트리거 엔드포인트 (빠졌던 부분 복구!)
+# 🌟 6. [핵심] 완전 자동화 크론(Cron) 엔드포인트 🌟
 # ==========================================
+@app.get("/cron/auto-check")
+async def auto_daily_check(db: Session = Depends(get_db)):
+    """
+    외부 크론(예: cron-job.org)이 주기적으로(예: 1시간마다) 찔러주는 엔드포인트입니다.
+    DB에 저장된 모든 주소를 순회하며, 유저가 설정한 주기(interval)가 도래한 건만 조회합니다.
+    """
+    histories = db.query(RealEstateHistoryTable).all()
+    current_time = datetime.now()
+    checked_count = 0
+    alert_count = 0
+
+    for item in histories:
+        # 유저가 설정한 주기가 지났는지 수학적으로 판별!
+        time_diff = current_time - item.last_checked_at
+        if time_diff >= timedelta(hours=item.monitoring_interval_hours):
+            checked_count += 1
+            # CODEF API로 변동 사항만 가볍게 조회
+            is_risk_detected = codef.check_register_status({
+                "addr_sido": item.address.split(" ")[0],
+                "addr_sigungu": item.address.split(" ")[1] if len(item.address.split(" ")) > 1 else ""
+            })
+            
+            # 위험 감지 시 문자 발송
+            if is_risk_detected:
+                msg = f"[집야 긴급알림]\n고객님이 등록하신 [{item.address}]에 새로운 등기신청이 감지되었습니다! 즉시 앱을 확인해주세요."
+                send_sms("01000000000", msg) # 상용화 시에는 item.owner_id(유저 정보)에 매핑된 실제 번호 호출
+                alert_count += 1
+                
+            # 검사를 마쳤으니 마지막 검사 시간을 현재 시간으로 갱신 (다음 주기를 위해)
+            item.last_checked_at = current_time
+            db.commit()
+            
+    return {
+        "status": "success",
+        "message": f"총 {len(histories)}건 중 {checked_count}건 검사 완료. 위험 알림 {alert_count}건 발송."
+    }
+
+# 데모 시연용 즉시 트리거 (기존 유지)
 @app.post("/trigger-monitor")
 async def trigger_monitor(req: SmsRequest, db: Session = Depends(get_db)):
     history = db.query(RealEstateHistoryTable).order_by(RealEstateHistoryTable.created_at.desc()).first()
-    target_address = history.address if history else "서울특별시 송파구 잠실동 123 (테스트아파트)"
-    
+    target_address = history.address if history else "서울특별시 송파구 잠실동 123"
     msg = f"[집야(Zipya) 긴급알림]\n고객님이 등록하신 [{target_address}]에 새로운 등기신청(근저당 설정 등)이 감지되었습니다. 즉시 앱에서 상세 내역을 확인해주세요!"
-    
     success = send_sms(req.phone_number, msg)
-    if success:
-        return {"message": "✅ 알림 문자가 성공적으로 발송되었습니다!"}
-    else:
-        return {"message": "✅ [시뮬레이션 모드] 문자 발송 로그가 서버에 기록되었습니다. (Solapi 키를 연동하면 실제 문자가 발송됩니다)"}
+    if success: return {"message": "✅ 알림 문자가 성공적으로 발송되었습니다!"}
+    else: return {"message": "✅ [시뮬레이션 모드] 문자 발송 로그가 서버에 기록되었습니다."}

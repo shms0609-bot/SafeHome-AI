@@ -3,6 +3,9 @@ import requests
 import base64
 import urllib.parse
 import json
+import hmac
+import hashlib
+import uuid
 from datetime import datetime
 from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -163,7 +166,46 @@ except Exception as e:
     print("⚠️ 법령 파일을 찾을 수 없습니다 (backend 폴더 내에 laws.txt를 만들어주세요):", e)
 
 # ==========================================
-# 🌟 4. 데이터 모델 및 API 엔드포인트
+# 🌟 4. 솔라피(Solapi) 문자 발송 유틸리티 (빠졌던 부분 복구!)
+# ==========================================
+def send_sms(phone_number: str, text: str):
+    api_key = os.getenv("SOLAPI_API_KEY", "")
+    api_secret = os.getenv("SOLAPI_API_SECRET", "")
+    sender_phone = os.getenv("SOLAPI_SENDER_PHONE", "01000000000")
+    
+    if not api_key or not api_secret:
+        print(f"💌 [문자 발송 시뮬레이션 - API 키 없음]\n수신: {phone_number}\n내용: {text}")
+        return False
+        
+    salt = str(uuid.uuid1().hex)
+    date = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+    message = date + salt
+    signature = hmac.new(api_secret.encode(), message.encode(), hashlib.sha256).hexdigest()
+    
+    headers = {
+        'Authorization': f'HMAC-SHA256 apiKey={api_key}, date={date}, salt={salt}, signature={signature}',
+        'Content-Type': 'application/json'
+    }
+    data = {
+        "message": {
+            "to": phone_number.replace("-", ""),
+            "from": sender_phone.replace("-", ""),
+            "text": text
+        }
+    }
+    try:
+        res = requests.post("https://api.solapi.com/messages/v4/send", headers=headers, json=data)
+        if res.status_code == 200:
+            return True
+        else:
+            print("❌ 문자 발송 실패:", res.text)
+            return False
+    except Exception as e:
+        print("❌ 문자 발송 에러:", e)
+        return False
+
+# ==========================================
+# 🌟 5. 데이터 모델 및 API 엔드포인트
 # ==========================================
 class UserRegister(BaseModel): user_id: str; password: str; username: str = None
 class LoginRequest(BaseModel): user_id: str; password: str
@@ -172,6 +214,7 @@ class EstateListRequest(BaseModel): addr_sido: str; addr_sigun: str; addr_dong: 
 class MarketPriceRequest(BaseModel): complex_no: str; search_gbn: str = "1"; dong: str = ""; ho: str = ""
 class ChatRequest(BaseModel): user_message: str; analysis_context: str
 class VerifyRequest(BaseModel): receipt_id: str; user_id: str
+class SmsRequest(BaseModel): phone_number: str # (문자 발송용 모델 복구)
 
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
@@ -276,7 +319,6 @@ async def analyze_contract(file: UploadFile = File(...)):
 async def chat_with_ai(request: ChatRequest):
     global current_key_index
     try:
-        # 🌟 시스템 프롬프트: 법령 데이터와 계약서 분석 결과를 통합 주입
         sys_instruct = f"""당신은 대한민국 법률에 기반하여 세입자의 권리를 보호하는 '집야(Zipya) AI 임대차 분쟁 최고 전문가'입니다. 
 
 [명령어]
@@ -305,3 +347,19 @@ async def chat_with_ai(request: ChatRequest):
                 attempts += 1
         raise HTTPException(status_code=429, detail="한도 초과")
     except Exception as e: raise HTTPException(status_code=500, detail=str(e))
+
+# ==========================================
+# 🌟 6. 등기 변동 알림(문자) 발송 트리거 엔드포인트 (빠졌던 부분 복구!)
+# ==========================================
+@app.post("/trigger-monitor")
+async def trigger_monitor(req: SmsRequest, db: Session = Depends(get_db)):
+    history = db.query(RealEstateHistoryTable).order_by(RealEstateHistoryTable.created_at.desc()).first()
+    target_address = history.address if history else "서울특별시 송파구 잠실동 123 (테스트아파트)"
+    
+    msg = f"[집야(Zipya) 긴급알림]\n고객님이 등록하신 [{target_address}]에 새로운 등기신청(근저당 설정 등)이 감지되었습니다. 즉시 앱에서 상세 내역을 확인해주세요!"
+    
+    success = send_sms(req.phone_number, msg)
+    if success:
+        return {"message": "✅ 알림 문자가 성공적으로 발송되었습니다!"}
+    else:
+        return {"message": "✅ [시뮬레이션 모드] 문자 발송 로그가 서버에 기록되었습니다. (Solapi 키를 연동하면 실제 문자가 발송됩니다)"}

@@ -375,8 +375,6 @@ function App() {
         </aside>
 
         <main className="main-content">
-          
-          {/* 🌟 여기서부터 토스 스타일로 변경된 메인(home) 화면입니다 🌟 */}
           {currentView === 'home' && (
             <div className="fade-in" style={{ flex: 1, overflowY: 'auto', padding: '50px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'var(--bg-main)' }}>
               
@@ -486,6 +484,45 @@ function App() {
               <div style={{ maxWidth: '800px', margin: '0 auto', marginTop: '20px' }}>
                 <h3 style={{ color: 'var(--accent)', marginBottom: '10px', fontSize: '1.8rem', display: 'flex', alignItems: 'center', gap: '10px' }}><Archive/> 내 등기부 보관함</h3>
                 <p style={{ color: '#888', marginBottom: '30px' }}>한 번 발급받은 등기부등본은 언제든 다시 다운로드할 수 있습니다.</p>
+
+                {/* 🌟 실시간 변동 감지 알림 데모 패널 🌟 */}
+                <div className="fade-in" style={{ background: '#fff5f5', padding: '25px', borderRadius: '20px', marginBottom: '30px', border: '1px solid #ffe3e3', display: 'flex', flexDirection: 'column', gap: '15px' }}>
+                  <div>
+                    <h4 style={{ color: '#e03131', margin: '0 0 8px 0', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '1.2rem' }}>
+                      <ShieldCheck size={24} /> 실시간 등기 변동 감지 모니터링 (MVP 데모용)
+                    </h4>
+                    <p style={{ margin: 0, fontSize: '0.95rem', color: '#888', lineHeight: '1.5' }}>
+                      대법원 신청사건 데이터를 상시 모니터링하고 있습니다. 심사위원의 번호를 입력하고 위험 알림 발송을 현장에서 직접 시연해 보세요!
+                    </p>
+                  </div>
+                  <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                    <input 
+                      id="demoPhone" 
+                      placeholder="받을 분의 휴대폰 번호 (- 없이)" 
+                      style={{ flex: 1, padding: '12px 15px', borderRadius: '12px', border: '1px solid #ffc9c9', outline: 'none' }} 
+                    />
+                    <button 
+                      onClick={async () => {
+                        const phone = document.getElementById('demoPhone').value;
+                        if (!phone) return alert("문자를 받을 휴대폰 번호를 입력해주세요.");
+                        try {
+                          const res = await fetch(`${API_BASE_URL}/trigger-monitor`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ phone_number: phone })
+                          });
+                          const data = await res.json();
+                          alert(data.message);
+                        } catch { alert("문자 발송 통신 실패!"); }
+                      }} 
+                      className="main-btn" 
+                      style={{ margin: 0, background: '#e03131', whiteSpace: 'nowrap', borderRadius: '12px' }}
+                    >
+                      위험 알림 문자 쏘기 🚀
+                    </button>
+                  </div>
+                </div>
+
                 <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                   {regHistory.length > 0 ? regHistory.map((item) => (
                     <div key={item.id} className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px' }}>

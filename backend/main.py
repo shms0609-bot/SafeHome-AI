@@ -140,11 +140,10 @@ class CodefService:
         raw_e_prepay_pass = os.getenv("E_PREPAY_PASS", "smsh1602").strip().strip('"').strip("'")
         encrypted_e_prepay_pass = self.encrypt_rsa(raw_e_prepay_pass)
         
-        # 1. 상용서버 + 발급 전용 창구 고정!
-        url = "https://api.codef.io/v1/kr/public/ck/real-estate-register/issue" 
+        # 🌟 범인 검거 완료: /issue가 아니라 /status가 맞습니다! (상용 서버 api.codef.io는 유지)
+        url = "https://api.codef.io/v1/kr/public/ck/real-estate-register/status" 
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
         
-        # 2. 제가 망쳤던 낙타표기법 삭제! 예전에 잘 되던 언더바(_) 표기법으로 완벽 복구
         payload = {
             "organization": "0002", "phoneNo": real_phone, "password": encrypted_password, 
             "inquiryType": "3", "realtyType": params.get("realtyType", "1"),
@@ -163,7 +162,7 @@ class CodefService:
             response = requests.post(url, headers=headers, json=payload)
             return json.loads(urllib.parse.unquote(response.text))
         except Exception as e: return {"error": str(e)}
-
+        
     def get_estate_list(self, params: dict):
         token = self.get_access_token()
         if not token: return {"error": "CODEF 토큰 발급 실패"}

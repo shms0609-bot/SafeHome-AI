@@ -117,46 +117,42 @@ body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Ro
   .chat-popup-header { cursor: default !important; }
 }
 /* 🌟 토스 스타일 메인 카드 CSS 🌟 */
+/* 메인 화면 서비스 카드 (다크모드 완벽 대응) */
 .toss-card {
-  background: #ffffff;
-  border: none;
-  border-radius: 24px;
-  padding: 32px 24px;
-  box-shadow: 0 10px 35px rgba(0, 0, 0, 0.04);
+  background: var(--card-bg);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 30px;
+  cursor: pointer;
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   display: flex;
   flex-direction: column;
   align-items: center;
   text-align: center;
-  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
 }
 
 .toss-card:hover {
-  transform: translateY(-6px);
-  box-shadow: 0 16px 45px rgba(0, 0, 0, 0.08);
-}
-
-.toss-icon-box {
-  width: 64px;
-  height: 64px;
-  border-radius: 20px;
-  background: #f2f4f6;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 20px;
+  transform: translateY(-5px);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.1);
+  border-color: var(--accent);
 }
 
 .toss-card h4 {
-  font-size: 1.25rem;
-  font-weight: 700;
-  color: #191f28;
-  margin: 0 0 10px 0;
+  color: var(--text);
+  font-size: 1.2rem;
+  margin: 15px 0 10px 0;
 }
 
 .toss-card p {
-  font-size: 0.95rem;
   color: #8b95a1;
-  line-height: 1.5;
+  font-size: 0.95rem;
   margin: 0;
+  line-height: 1.5;
+}
+
+/* 아래쪽 넓은 카드도 다크모드 대응 */
+.wide-card {
+  grid-column: 1 / -1;
+  background: var(--card-bg);
 }

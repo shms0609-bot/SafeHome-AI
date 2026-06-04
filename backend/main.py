@@ -291,9 +291,9 @@ async def fetch_info(request: RealEstateRequest, db: Session = Depends(get_db)):
     interval = codef_params.pop("interval", 24)
     
     # 1. UI 결제 열람권 검사
-    ticket_record = db.query(TicketTable).filter(TicketTable.user_id == user_id).first()
-    if not ticket_record or ticket_record.count <= 0:
-        return {"error": "🎫 열람권이 부족합니다. 결제 후 충전해 주세요!"}
+    #ticket_record = db.query(TicketTable).filter(TicketTable.user_id == user_id).first()
+    #if not ticket_record or ticket_record.count <= 0:
+    #    return {"error": "🎫 열람권이 부족합니다. 결제 후 충전해 주세요!"}
 
     # 2. 진짜 CODEF API(대법원)로 요청 전송
     res = codef.get_real_estate_register(codef_params)

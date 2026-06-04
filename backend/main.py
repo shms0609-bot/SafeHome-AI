@@ -132,24 +132,31 @@ class CodefService:
     def get_real_estate_register(self, params: dict):
         token = self.get_access_token()
         if not token: return {"error": "CODEF 토큰 발급 실패"}
-        real_phone = os.getenv("REAL_ESTATE_PHONE", "01000000000").strip().strip('"').strip("'")
-        raw_password = os.getenv("REAL_ESTATE_PASSWORD", "1234").strip().strip('"').strip("'")
-        encrypted_password = self.encrypt_rsa(raw_password)
         
+        # 🌟 핵심 해결책: 환경변수 무시하고 비회원용 가짜 4자리 비밀번호("1234") 강제 고정!
+        encrypted_password = self.encrypt_rsa("1234") 
+        
+        # 실제 결제는 아래 전자민원캐시(ePrepay) 정보로 진행됩니다.
         e_prepay_no = os.getenv("E_PREPAY_NO", "H82003788709").replace("-", "").strip().strip('"').strip("'")
         raw_e_prepay_pass = os.getenv("E_PREPAY_PASS", "smsh1602").strip().strip('"').strip("'")
         encrypted_e_prepay_pass = self.encrypt_rsa(raw_e_prepay_pass)
         
-        # 🌟 범인 검거 완료: /issue가 아니라 /status가 맞습니다! (상용 서버 api.codef.io는 유지)
         url = "https://development.codef.io/v1/kr/public/ck/real-estate-register/status" 
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
         
         payload = {
-            "organization": "0002", "phoneNo": real_phone, "password": encrypted_password, 
+            "organization": "0002", 
+            
+            # 🌟 대법원 비회원 로그인 양식으로 완벽 원복
+            "phoneNo": "01000000000", 
+            "password": encrypted_password, 
+            
             "inquiryType": "3", "realtyType": params.get("realtyType", "1"),
             "jointMortgageJeonseYN": "1", "tradingYN": "1", "issueType": "0", 
             "originDataYN": "1", "reqOriginDataYN": "1", "registerSummaryYN": "1", 
-            "ePrepayNo": e_prepay_no, "ePrepayPass": encrypted_e_prepay_pass,
+            
+            "ePrepayNo": e_prepay_no, 
+            "ePrepayPass": encrypted_e_prepay_pass, # 결제 캐시 비밀번호 
             
             "addr_sido": params.get("addr_sido", ""),
             "addr_sigungu": params.get("addr_sigungu", ""),

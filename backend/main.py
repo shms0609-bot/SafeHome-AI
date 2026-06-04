@@ -133,10 +133,11 @@ class CodefService:
         token = self.get_access_token()
         if not token: return {"error": "CODEF 토큰 발급 실패"}
         
-        # 🌟 핵심 해결책: 환경변수 무시하고 비회원용 가짜 4자리 비밀번호("1234") 강제 고정!
-        encrypted_password = self.encrypt_rsa("1234") 
+        # 🌟 1. 전화번호(비회원) 대신 아이디(회원)를 불러옵니다!
+        real_id = os.getenv("REAL_ESTATE_ID", "").strip().strip('"').strip("'")
+        raw_password = os.getenv("REAL_ESTATE_PASSWORD", "").strip().strip('"').strip("'")
+        encrypted_password = self.encrypt_rsa(raw_password)
         
-        # 실제 결제는 아래 전자민원캐시(ePrepay) 정보로 진행됩니다.
         e_prepay_no = os.getenv("E_PREPAY_NO", "H82003788709").replace("-", "").strip().strip('"').strip("'")
         raw_e_prepay_pass = os.getenv("E_PREPAY_PASS", "smsh1602").strip().strip('"').strip("'")
         encrypted_e_prepay_pass = self.encrypt_rsa(raw_e_prepay_pass)
@@ -147,16 +148,16 @@ class CodefService:
         payload = {
             "organization": "0002", 
             
-            # 🌟 대법원 비회원 로그인 양식으로 완벽 원복
-            "phoneNo": "01000000000", 
+            # 🌟 2. 핵심 수정: 대법원에 '아이디 로그인'임을 명시하고 아이디를 전달합니다.
+            "loginType": "0", 
+            "id": real_id,
+            "userId": real_id, 
             "password": encrypted_password, 
             
             "inquiryType": "3", "realtyType": params.get("realtyType", "1"),
             "jointMortgageJeonseYN": "1", "tradingYN": "1", "issueType": "0", 
             "originDataYN": "1", "reqOriginDataYN": "1", "registerSummaryYN": "1", 
-            
-            "ePrepayNo": e_prepay_no, 
-            "ePrepayPass": encrypted_e_prepay_pass, # 결제 캐시 비밀번호 
+            "ePrepayNo": e_prepay_no, "ePrepayPass": encrypted_e_prepay_pass,
             
             "addr_sido": params.get("addr_sido", ""),
             "addr_sigungu": params.get("addr_sigungu", ""),

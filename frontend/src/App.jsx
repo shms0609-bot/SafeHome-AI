@@ -289,7 +289,7 @@ function App() {
     let pdfBase64 = null;
     if (regResult && regResult.data) {
       const dataObj = Array.isArray(regResult.data) ? regResult.data[0] : regResult.data;
-      if (dataObj) pdfBase64 = dataObj.resOriGinalData || dataObj.resoriGinalData;
+      if (dataObj) pdfBase64 = dataObj.resOriginalData || dataObj.resOriGinalData;
     }
     if (pdfBase64) {
       const linkSource = `data:application/pdf;base64,${pdfBase64}`; const downloadLink = document.createElement("a"); downloadLink.href = linkSource; downloadLink.download = `등기부등본_${selectedAddress.replace(/ /g, '_')}.pdf`; downloadLink.click();

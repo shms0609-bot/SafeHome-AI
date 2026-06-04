@@ -141,7 +141,7 @@ class CodefService:
         raw_e_prepay_pass = os.getenv("E_PREPAY_PASS", "smsh1602").strip().strip('"').strip("'")
         encrypted_e_prepay_pass = self.encrypt_rsa(raw_e_prepay_pass)
         
-        url = f"{self.base_url}/kr/public/ck/real-estate-register/status" 
+        url = f"{self.base_url}/kr/public/ck/real-estate-register/issue"
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
         payload = {
             "organization": "0002", "phoneNo": real_phone, "password": encrypted_password, 

@@ -136,18 +136,30 @@ class CodefService:
         raw_password = os.getenv("REAL_ESTATE_PASSWORD", "1234").strip().strip('"').strip("'")
         encrypted_password = self.encrypt_rsa(raw_password)
         
-        # 승현님이 미리 충전해둔 인터넷등기소 예치금 정보 (여기서 돈이 빠져나감!)
         e_prepay_no = os.getenv("E_PREPAY_NO", "H82003788709").replace("-", "").strip().strip('"').strip("'")
         raw_e_prepay_pass = os.getenv("E_PREPAY_PASS", "smsh1602").strip().strip('"').strip("'")
         encrypted_e_prepay_pass = self.encrypt_rsa(raw_e_prepay_pass)
         
-        url = f"{self.base_url}/kr/public/ck/real-estate-register/issue"
+        # ⚠️ 반드시 URL 끝이 /status 여야 합니다! (발급/열람 공통 창구)
+        url = f"{self.base_url}/kr/public/ck/real-estate-register/status" 
+        
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
+        
+        # 🌟 핵심 수정: CODEF가 알아들을 수 있는 이름(대문자 카멜케이스)으로 번역해서 전달
         payload = {
             "organization": "0002", "phoneNo": real_phone, "password": encrypted_password, 
             "inquiryType": params.get("inquiryType", "3"), "realtyType": params.get("realtyType", "1"),
-            "jointMortgageJeonseYN": "1", "tradingYN": "1", "issueType": "0", "originDataYN": "1",      
-            "registerSummaryYN": "1", "ePrepayNo": e_prepay_no, "ePrepayPass": encrypted_e_prepay_pass, **params
+            "jointMortgageJeonseYN": "1", "tradingYN": "1", "issueType": "0", 
+            "originDataYN": "1", "reqOriginDataYN": "1", # PDF 원본 요청 플래그 2중 확인
+            "registerSummaryYN": "1", "ePrepayNo": e_prepay_no, "ePrepayPass": encrypted_e_prepay_pass,
+            
+            # 👇 여기서 주소가 정확히 들어가야 대법원이 PDF를 내어줍니다!
+            "addrSido": params.get("addr_sido", ""),
+            "addrSigungu": params.get("addr_sigungu", ""),
+            "addrRoadName": params.get("addr_roadName", ""),
+            "addrBuildingNumber": params.get("addr_buildingNumber", ""),
+            "dong": params.get("dong", ""),
+            "ho": params.get("ho", "")
         }
         try:
             response = requests.post(url, headers=headers, json=payload)
@@ -270,7 +282,7 @@ async def verify_payment(req: VerifyRequest, db: Session = Depends(get_db)):
 
 
 # ==========================================
-# 🌟 [진짜 발급] 실제 대법원 통신 엔드포인트 복구!
+# 🌟 [진짜 발급] 실제 대법원 통신 엔드포인트
 # ==========================================
 @app.post("/fetch-real-estate")
 async def fetch_info(request: RealEstateRequest, db: Session = Depends(get_db)):
@@ -279,30 +291,35 @@ async def fetch_info(request: RealEstateRequest, db: Session = Depends(get_db)):
     interval = codef_params.pop("interval", 24)
     
     # 1. UI 결제 열람권 검사
-    #ticket_record = db.query(TicketTable).filter(TicketTable.user_id == user_id).first()
-    #if not ticket_record or ticket_record.count <= 0:
-    #    return {"error": "🎫 열람권이 부족합니다. 결제 후 충전해 주세요!"}
+    ticket_record = db.query(TicketTable).filter(TicketTable.user_id == user_id).first()
+    if not ticket_record or ticket_record.count <= 0:
+        return {"error": "🎫 열람권이 부족합니다. 결제 후 충전해 주세요!"}
 
-    # 2. 진짜 CODEF API(대법원)로 요청 전송 (인터넷등기소 예치금 차감됨!)
+    # 2. 진짜 CODEF API(대법원)로 요청 전송
     res = codef.get_real_estate_register(codef_params)
     
-    # 3. 발급 성공 시 처리
+    # 3. 발급 성공 여부 깐깐하게 검증
     if res.get("data") or (res.get("result") and res["result"].get("code") == "CF-00000"):
-        ticket_record.count -= 1  # UI 열람권 1장 차감
-        db.commit()
-        
         data_obj = res["data"][0] if isinstance(res["data"], list) else res["data"]
         pdf_data = data_obj.get("resOriginalData") or data_obj.get("resOriGinalData")
         
+        # 🌟 핵심 수정: PDF 알맹이가 진짜로 도착했을 때만 열람권을 깎는 방어 로직!
         if pdf_data:
+            ticket_record.count -= 1  # 여기서 비로소 1장 차감
+            
             full_addr = f"{request.addr_sido} {request.addr_roadName} {request.addr_buildingNumber} {request.dong} {request.ho}".strip()
-            # 4. DB 보관함에 주소와 설정 주기(Interval) 정상 등록
+            # DB 보관함에 주소와 설정 주기 정상 등록
             new_history = RealEstateHistoryTable(
                 owner_id=user_id, address=full_addr, pdf_base64=pdf_data, 
                 monitoring_interval_hours=interval
             )
             db.add(new_history)
             db.commit()
+            return res
+        else:
+            # 대법원 접속은 성공했지만, 상세 주소 오류 등으로 PDF가 안 나온 경우 (열람권 보호됨)
+            error_msg = data_obj.get("resMessage") or "정확한 동/호수를 입력했는지 확인해주세요."
+            return {"error": f"대법원 발급 거절: {error_msg}"}
             
     return res
 

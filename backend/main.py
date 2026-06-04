@@ -161,8 +161,8 @@ class CodefService:
             "jointMortgageJeonseYN": "1", "tradingYN": "1", "issueType": "0", 
             "originDataYN": "1", "reqOriginDataYN": "1", "registerSummaryYN": "1", 
             
-            "ePrepayNo": e_prepay_no, 
-            "ePrepayPass": encrypted_e_prepay_pass, 
+            "ePrepayNo": e_prepay_no,
+            "ePrepayPass": raw_e_prepay_pass,  # 🌟 날것 그대로의 8자리 (smsh1602) 전달! 
             
             "addr_sido": params.get("addr_sido", ""),
             "addr_sigungu": params.get("addr_sigungu", ""),

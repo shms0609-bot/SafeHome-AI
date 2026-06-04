@@ -273,6 +273,34 @@ async def login(req: LoginRequest, db: Session = Depends(get_db)):
     if not user: raise HTTPException(status_code=401, detail="정보 불일치")
     return {"access_token": "valid"}
 
+# ==========================================
+# 🌟 회원가입 엔드포인트 (중복 검사 완벽 적용)
+# ==========================================
+@app.post("/register")
+async def register(req: UserRegister, db: Session = Depends(get_db)):
+    # 1. 중복 검사: DB에 입력한 아이디가 진짜로 존재하는지 확인
+    existing_user = db.query(UserTable).filter(UserTable.user_id == req.user_id).first()
+    
+    if existing_user:
+        # 진짜로 중복일 때만 400 에러를 뱉습니다.
+        raise HTTPException(status_code=400, detail="이미 사용중인 아이디입니다.")
+    
+    # 2. 새 유저 DB에 안전하게 저장
+    try:
+        new_user = UserTable(
+            user_id=req.user_id, 
+            password=req.password, 
+            username=req.username or "사용자"
+        )
+        db.add(new_user)
+        db.commit()
+        return {"message": "회원가입 성공"}
+        
+    except Exception as e:
+        # DB에 저장하다가 문제가 생기면 롤백하고 진짜 이유를 알려줍니다.
+        db.rollback()
+        raise HTTPException(status_code=500, detail=f"서버 저장 오류: {str(e)}")
+        
 @app.get("/user-info/{user_id}")
 async def get_user_info(user_id: str, db: Session = Depends(get_db)):
     ticket_record = db.query(TicketTable).filter(TicketTable.user_id == user_id).first()

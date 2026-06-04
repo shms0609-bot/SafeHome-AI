@@ -76,7 +76,7 @@ class CodefService:
         self.client_id = os.getenv("CODEF_CLIENT_ID", "").strip().strip('"').strip("'")
         self.client_secret = os.getenv("CODEF_CLIENT_SECRET", "").strip().strip('"').strip("'")
         self.public_key = os.getenv("CODEF_PUBLIC_KEY", "").strip().strip('"').strip("'")
-        self.base_url = "https://api.codef.io/v1"
+        self.base_url = "https://development.codef.io/v1"
 
     def encrypt_rsa(self, text: str) -> str:
         if not self.public_key: return ""

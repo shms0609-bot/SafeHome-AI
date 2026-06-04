@@ -141,7 +141,7 @@ class CodefService:
         encrypted_e_prepay_pass = self.encrypt_rsa(raw_e_prepay_pass)
         
         # ⚠️ 반드시 URL 끝이 /status 여야 합니다! (발급/열람 공통 창구)
-        url = f"{self.base_url}/kr/public/ck/real-estate-register/status" 
+        url = f"{self.base_url}/kr/public/ck/real-estate-register/issue"
         
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
         
@@ -305,7 +305,7 @@ async def fetch_info(request: RealEstateRequest, db: Session = Depends(get_db)):
         
         # 🌟 핵심 수정: PDF 알맹이가 진짜로 도착했을 때만 열람권을 깎는 방어 로직!
         if pdf_data:
-            ticket_record.count -= 1  # 여기서 비로소 1장 차감
+        #    ticket_record.count -= 1  # 여기서 비로소 1장 차감
             
             full_addr = f"{request.addr_sido} {request.addr_roadName} {request.addr_buildingNumber} {request.dong} {request.ho}".strip()
             # DB 보관함에 주소와 설정 주기 정상 등록

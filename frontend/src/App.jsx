@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
 import ReactMarkdown from 'react-markdown';
-import { Sun, Moon, Send, FileSearch, Building2, ShieldCheck, MessageSquare, ArrowLeft, Upload, MapPin, LogOut, Plus, Archive, TrendingUp, Building, Maximize2, Menu, X } from 'lucide-react';
+import { Sun, Moon, Send, FileSearch, Building2, ShieldCheck, MessageSquare, ArrowLeft, Upload, MapPin, LogOut, Plus, Archive, TrendingUp, Building, Maximize2, Menu, X, Clock } from 'lucide-react';
 import DaumPostcode from 'react-daum-postcode';
 import { Bootpay } from '@bootpay/client-js';
 import './App.css';
 
-const API_BASE_URL = "https://safehome-ai-pkkv.onrender.com"; 
+const API_BASE_URL = "https://safehome-ai-1.onrender.com"; 
 
 const formatKoreanPrice = (priceStr) => {
   const num = Number(priceStr);
@@ -15,7 +15,8 @@ const formatKoreanPrice = (priceStr) => {
   return eok > 0 ? (man > 0 ? `${eok}억 ${man.toLocaleString()}만원` : `${eok}억원`) : `${man.toLocaleString()}만원`;
 };
 
-function Login({ onLoginSuccess }) {
+// 🌟 로그인 컴포넌트에 테마(theme) props 추가
+function Login({ onLoginSuccess, theme, setTheme }) {
   const [isRegisterMode, setIsRegisterMode] = useState(false);
   const [id, setId] = useState("");
   const [pw, setPw] = useState("");
@@ -66,10 +67,21 @@ function Login({ onLoginSuccess }) {
   };
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'var(--bg-main)' }}>
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100vh', background: 'var(--bg-main)', position: 'relative' }}>
+      
+      {/* 🌟 로그인 화면 테마 변경 토글 버튼 */}
+      <div style={{ position: 'absolute', top: '20px', right: '20px' }}>
+        <button onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')} style={{ background: 'var(--card-bg)', border: '1px solid var(--border)', borderRadius: '50px', padding: '10px 20px', display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', color: 'var(--text)', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}>
+          {theme === 'light' ? <><Moon size={18} /> 다크 모드로 보기</> : <><Sun size={18} /> 라이트 모드로 보기</>}
+        </button>
+      </div>
+
       <div style={{ background: 'var(--card-bg)', padding: '40px', borderRadius: '20px', boxShadow: '0 8px 24px rgba(0,0,0,0.1)', width: '100%', maxWidth: '420px', border: '1px solid var(--border)' }}>
-        <h2 style={{ textAlign: 'center', marginBottom: '30px', color: 'var(--accent)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '10px' }}>
-          <ShieldCheck size={32} /> {isRegisterMode ? "회원가입" : "로그인"}
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '20px' }}>
+          <img src={theme === 'dark' ? '/logo-dark.jpg' : '/logo-light.jpg'} alt="로고" style={{ height: '60px', borderRadius: '15px' }} />
+        </div>
+        <h2 style={{ textAlign: 'center', marginBottom: '30px', color: 'var(--text)', fontSize: '1.5rem' }}>
+          {isRegisterMode ? "회원가입" : "로그인"}
         </h2>
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
           {isRegisterMode && <input type="text" placeholder="이름 (닉네임)" value={name} onChange={(e)=>setName(e.target.value)} style={{ padding: '15px', borderRadius: '12px', border: '1px solid var(--border)', background: 'var(--bg-main)', color: 'var(--text)' }} required />}
@@ -92,6 +104,7 @@ function Login({ onLoginSuccess }) {
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [showSplash, setShowSplash] = useState(false); // 🌟 스플래시 화면 상태 추가
   const [userId, setUserId] = useState("");
   const [theme, setTheme] = useState('light');
   const [currentView, setCurrentView] = useState('home');
@@ -126,6 +139,7 @@ function App() {
   const [regDong, setRegDong] = useState("");
   const [regHo, setRegHo] = useState("");
   const [regRealtyType, setRegRealtyType] = useState("1");
+  const [regInterval, setRegInterval] = useState(24); 
   const [regHistory, setRegHistory] = useState([]); 
 
   const [searchSido, setSearchSido] = useState("");
@@ -161,6 +175,13 @@ function App() {
     setIsLoggedIn(false); 
     setCurrentView('home'); 
     window.location.reload();
+  };
+
+  // 🌟 로그인 성공 시 바로 메인이 아니라 스플래시 화면 트리거
+  const handleLoginSuccess = (id) => {
+    setUserId(id);
+    setShowSplash(true); 
+    setIsLoggedIn(true);
   };
 
   const handlePayment = async () => {
@@ -229,7 +250,17 @@ function App() {
     try {
       const r = await fetch(`${API_BASE_URL}/fetch-real-estate`, {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ user_id: userId, addr_sido: regSido, addr_sigungu: regSigungu, addr_roadName: regRoadName, addr_buildingNumber: regBldNum, dong: regDong, ho: regHo, realtyType: regRealtyType })
+        body: JSON.stringify({ 
+          user_id: userId, 
+          addr_sido: regSido, 
+          addr_sigungu: regSigungu, 
+          addr_roadName: regRoadName, 
+          addr_buildingNumber: regBldNum, 
+          dong: regDong, 
+          ho: regHo, 
+          realtyType: regRealtyType,
+          interval: parseInt(regInterval) 
+        })
       });
       const d = await r.json();
       if (d.error) {
@@ -289,12 +320,7 @@ function App() {
       const res = await fetch(`${API_BASE_URL}/fetch-market-price`, { 
         method: 'POST', 
         headers: { 'Content-Type': 'application/json' }, 
-        body: JSON.stringify({ 
-          complex_no: complexNo, 
-          search_gbn: searchGbn, 
-          dong: cleanDong, 
-          ho: cleanHo 
-        }) 
+        body: JSON.stringify({ complex_no: complexNo, search_gbn: searchGbn, dong: cleanDong, ho: cleanHo }) 
       });
       const data = await res.json(); 
       if(data.result && data.result.code !== "CF-00000" && !data.data) {
@@ -326,14 +352,37 @@ function App() {
     }
   };
 
-  if (!isLoggedIn) return <Login onLoginSuccess={(id)=>{setIsLoggedIn(true); setUserId(id);}} />;
+  // 🌟 로그인이 안 된 상태면 테마 변경이 가능한 Login 화면 렌더링
+  if (!isLoggedIn) return <Login onLoginSuccess={handleLoginSuccess} theme={theme} setTheme={setTheme} />;
 
+  // 🌟 스플래시 화면 재생 로직 (영상 재생 완료 시 메인 화면으로 넘어감)
+  if (showSplash) {
+    return (
+      <div className="fade-in" style={{
+        position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh',
+        backgroundColor: theme === 'dark' ? '#000000' : '#ffffff',
+        display: 'flex', justifyContent: 'center', alignItems: 'center', zIndex: 9999
+      }}>
+        <video 
+          autoPlay 
+          muted 
+          playsInline 
+          onEnded={() => setShowSplash(false)} // 영상 재생이 끝나면 스플래시 종료
+          style={{ width: '100%', height: '100%', objectFit: 'contain' }}
+        >
+          <source src={theme === 'dark' ? '/splash-dark.mp4' : '/splash-light.mp4'} type="video/mp4" />
+        </video>
+      </div>
+    );
+  }
+
+  // 🌟 메인 화면 시작
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', backgroundColor: 'var(--bg-main)', color: 'var(--text)' }}>
+    <div className="fade-in" style={{ display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden', backgroundColor: 'var(--bg-main)', color: 'var(--text)' }}>
       
       <div className="mobile-header">
         <div style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }} onClick={() => navTo('home')}>
-          <img src={theme === 'dark' ? '/logo-dark.jpg' : '/logo-light.jpg'} alt="집야 로고" style={{ height: '40px', borderRadius: '10px' }} />
+          <img src={theme === 'dark' ? '/logo-dark.jpg' : '/logo-light.jpg'} alt="집야 로고" style={{ height: '50px', borderRadius: '10px' }} />
         </div>
         <button className="icon-btn" onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}>
           {isMobileMenuOpen ? <X size={28} /> : <Menu size={28} />}
@@ -343,8 +392,13 @@ function App() {
       <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
         
         <aside className={`sidebar ${isMobileMenuOpen ? 'open' : ''}`}>
-          <div className="sidebar-logo" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '10px', cursor: 'pointer', marginBottom: '20px' }} onClick={() => navTo('home')}>
-            <img src={theme === 'dark' ? '/logo-dark.jpg' : '/logo-light.jpg'} alt="집야 로고" style={{ height: '55px', borderRadius: '12px', boxShadow: '0 4px 10px rgba(0,0,0,0.1)' }} />
+          {/* 🌟 수정 포인트: 사이드바 로고 크기를 시원하게 대폭 확대했습니다! */}
+          <div className="sidebar-logo" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '5px', cursor: 'pointer', marginBottom: '25px', width: '100%' }} onClick={() => navTo('home')}>
+            <img 
+              src={theme === 'dark' ? '/logo-dark.jpg' : '/logo-light.jpg'} 
+              alt="집야 로고" 
+              style={{ width: '160px', height: 'auto', borderRadius: '20px', boxShadow: '0 6px 15px rgba(0,0,0,0.08)' }} 
+            />
           </div>
           <button onClick={() => navTo('home')} style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '12px 15px', borderRadius: '50px', background: 'var(--card-bg)', border: '1px solid var(--border)', color: 'var(--text)', cursor: 'pointer', fontSize: '1rem', fontWeight: '500', marginBottom: '30px', boxShadow: '0 2px 5px rgba(0,0,0,0.05)' }}>
             <Plus size={20} /> 새 분석 시작
@@ -375,6 +429,7 @@ function App() {
         </aside>
 
         <main className="main-content">
+          
           {currentView === 'home' && (
             <div className="fade-in" style={{ flex: 1, overflowY: 'auto', padding: '50px 20px', display: 'flex', flexDirection: 'column', alignItems: 'center', background: 'var(--bg-main)' }}>
               
@@ -454,6 +509,26 @@ function App() {
                     <input placeholder="동 (예: 101동)" value={regDong} onChange={(e) => setRegDong(e.target.value)} style={{ flex: 1, padding: '15px', borderRadius: '10px', border: '1px solid var(--border)' }} />
                     <input placeholder="호 (예: 202호)" value={regHo} onChange={(e) => setRegHo(e.target.value)} style={{ flex: 1, padding: '15px', borderRadius: '10px', border: '1px solid var(--border)' }} />
                   </div>
+                  
+                  <div style={{ marginBottom: '30px', padding: '20px', background: '#f8f9fa', borderRadius: '12px', border: '1px solid #e9ecef' }}>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px', fontWeight: 'bold', color: '#495057' }}>
+                      <Clock size={18} /> 실시간 모니터링 주기 설정
+                    </label>
+                    <p style={{ fontSize: '0.85rem', color: '#868e96', marginBottom: '15px' }}>
+                      설정하신 주기에 맞춰 대법원 변동 사항을 자동 검사하고, 위험 감지 시 문자를 발송해 드립니다.
+                    </p>
+                    <select 
+                      value={regInterval} 
+                      onChange={(e) => setRegInterval(e.target.value)} 
+                      style={{ width: '100%', padding: '12px', borderRadius: '10px', border: '1px solid #ced4da', background: '#fff', fontSize: '1rem', outline: 'none' }}
+                    >
+                      <option value="1">⏱️ 1시간마다 검사 (가계약 직후 초고위험군)</option>
+                      <option value="3">⏱️ 3시간마다 검사 (잔금 치르기 전 고위험군)</option>
+                      <option value="12">⏱️ 12시간마다 검사 (입주 초반 주의 요망)</option>
+                      <option value="24">⏱️ 24시간마다 검사 (일반 안심 거주자 / 권장)</option>
+                    </select>
+                  </div>
+
                   <button onClick={handleFetchRegister} disabled={regLoading} className="main-btn" style={{ width: '100%', display: 'flex', justifyContent: 'center', gap: '10px' }}>
                     <Building2 size={20} /> {regLoading ? "대법원 통신 중..." : "등기부등본 가져오기 (열람권 1장 차감)"}
                   </button>
@@ -485,14 +560,13 @@ function App() {
                 <h3 style={{ color: 'var(--accent)', marginBottom: '10px', fontSize: '1.8rem', display: 'flex', alignItems: 'center', gap: '10px' }}><Archive/> 내 등기부 보관함</h3>
                 <p style={{ color: '#888', marginBottom: '30px' }}>한 번 발급받은 등기부등본은 언제든 다시 다운로드할 수 있습니다.</p>
 
-                {/* 🌟 실시간 변동 감지 알림 데모 패널 🌟 */}
                 <div className="fade-in" style={{ background: '#fff5f5', padding: '25px', borderRadius: '20px', marginBottom: '30px', border: '1px solid #ffe3e3', display: 'flex', flexDirection: 'column', gap: '15px' }}>
                   <div>
                     <h4 style={{ color: '#e03131', margin: '0 0 8px 0', display: 'flex', alignItems: 'center', gap: '8px', fontSize: '1.2rem' }}>
                       <ShieldCheck size={24} /> 실시간 등기 변동 감지 모니터링 (MVP 데모용)
                     </h4>
                     <p style={{ margin: 0, fontSize: '0.95rem', color: '#888', lineHeight: '1.5' }}>
-                      대법원 신청사건 데이터를 상시 모니터링하고 있습니다. 심사위원의 번호를 입력하고 위험 알림 발송을 현장에서 직접 시연해 보세요!
+                      대법원 신청사건 데이터를 설정된 주기에 맞춰 상시 모니터링하고 있습니다. 심사위원의 번호를 입력하고 위험 알림 발송을 현장에서 직접 시연해 보세요!
                     </p>
                   </div>
                   <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
@@ -528,7 +602,13 @@ function App() {
                     <div key={item.id} className="card" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '20px' }}>
                       <div>
                         <div style={{ fontWeight: 'bold', fontSize: '1.1rem', marginBottom: '5px' }}>{item.address}</div>
-                        <div style={{ fontSize: '0.9rem', color: '#888' }}>발급 일시: {new Date(item.created_at).toLocaleString()}</div>
+                        <div style={{ fontSize: '0.9rem', color: '#888', marginBottom: '3px' }}>발급 일시: {new Date(item.created_at).toLocaleString()}</div>
+                        {item.monitoring_interval_hours && (
+                          <div style={{ display: 'inline-block', fontSize: '0.75rem', background: '#e3f2fd', color: '#1976d2', padding: '4px 8px', borderRadius: '4px', fontWeight: 'bold' }}>
+                            <Clock size={12} style={{ verticalAlign: 'middle', marginRight: '4px' }}/> 
+                            {item.monitoring_interval_hours}시간 주기 모니터링 중
+                          </div>
+                        )}
                       </div>
                       <button onClick={() => downloadSavedPDF(item.pdf_base64, item.address)} className="main-btn" style={{ margin: 0, padding: '10px 20px' }}>열람 / 다운로드</button>
                     </div>
@@ -736,10 +816,7 @@ function App() {
                               key={idx} 
                               onClick={() => { setMarketDong(""); setMarketHo(""); handleFetchMarketPrice(estate.commComplexNo); }} 
                               className="hover-card" 
-                              style={{ 
-                                border: isSelected ? '2px solid var(--accent)' : '', 
-                                background: isSelected ? 'rgba(26, 115, 232, 0.05)' : ''
-                              }}
+                              style={{ border: isSelected ? '2px solid var(--accent)' : '', background: isSelected ? 'rgba(26, 115, 232, 0.05)' : '' }}
                             >
                               <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
                                 <Building color={isSelected ? "var(--accent)" : "#888"} />

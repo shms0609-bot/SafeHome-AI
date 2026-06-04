@@ -149,7 +149,7 @@ class CodefService:
         if not encrypted_e_prepay_pass:
             return {"error": "🚨 결제 비밀번호 암호화 실패! CODEF_PUBLIC_KEY 값을 확인해주세요."}
             
-        url = "https://development.codef.io/v1/kr/public/ck/real-estate-register/status" 
+        url = "https://development.codef.io/v1/kr/public/ck/real-estate-register/issue" 
         headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
         
         payload = {

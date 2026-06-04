@@ -292,7 +292,7 @@ async def fetch_info(request: RealEstateRequest, db: Session = Depends(get_db)):
         db.commit()
         
         data_obj = res["data"][0] if isinstance(res["data"], list) else res["data"]
-        pdf_data = data_obj.get("resOriGinalData") or data_obj.get("resoriGinalData")
+        pdf_data = data_obj.get("resOriginalData") or data_obj.get("resOriGinalData")
         
         if pdf_data:
             full_addr = f"{request.addr_sido} {request.addr_roadName} {request.addr_buildingNumber} {request.dong} {request.ho}".strip()

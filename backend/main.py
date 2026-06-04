@@ -274,6 +274,21 @@ async def login(req: LoginRequest, db: Session = Depends(get_db)):
     return {"access_token": "valid"}
 
 # ==========================================
+# 🌟 프론트엔드 맞춤형 아이디 중복 확인 창구
+# ==========================================
+@app.get("/check-id/{user_id}")
+async def check_id(user_id: str, db: Session = Depends(get_db)):
+    # DB에서 해당 아이디가 있는지 검색합니다.
+    existing_user = db.query(UserTable).filter(UserTable.user_id == user_id).first()
+    
+    if existing_user:
+        # DB에 진짜로 아이디가 있을 때만 에러를 뱉습니다.
+        raise HTTPException(status_code=400, detail="이미 사용 중인 아이디입니다.")
+    
+    # DB에 없으면 프론트엔드에게 통과 신호를 보냅니다!
+    return {"message": "사용 가능한 아이디입니다."}
+    
+# ==========================================
 # 🌟 회원가입 엔드포인트 (중복 검사 완벽 적용)
 # ==========================================
 @app.post("/register")
@@ -300,7 +315,7 @@ async def register(req: UserRegister, db: Session = Depends(get_db)):
         # DB에 저장하다가 문제가 생기면 롤백하고 진짜 이유를 알려줍니다.
         db.rollback()
         raise HTTPException(status_code=500, detail=f"서버 저장 오류: {str(e)}")
-        
+
 @app.get("/user-info/{user_id}")
 async def get_user_info(user_id: str, db: Session = Depends(get_db)):
     ticket_record = db.query(TicketTable).filter(TicketTable.user_id == user_id).first()
